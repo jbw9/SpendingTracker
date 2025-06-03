@@ -119,7 +119,7 @@ const LoginDetails: React.FC<LoginDetailsProps> = ({ toggleView, onLogin }) => {
         )}
         <button
           type="submit"
-          className="w-full h-12 bg-black rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all"
+          className="w-full h-12  bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all"
         >
           Sign in
         </button>

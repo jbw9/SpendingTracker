@@ -203,7 +203,7 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full h-12 bg-black rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+          className="w-full h-12  bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
           {isLoading ? "Creating Account..." : "Sign up"}
         </button>

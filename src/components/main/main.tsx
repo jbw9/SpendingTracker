@@ -3,11 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Progress } from './ui/progress';
-import { Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Plus, Wallet, TrendingUp, PieChart, Trash2 } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Textarea } from './ui/textarea';
 
 interface MainPageProps {
@@ -33,15 +33,15 @@ interface Category {
   user_id: string;
 }
 
-const COLORS = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5A2B', '#6B7280'];
+const COLORS = ['#FFFFFF', '#FEF3C7', '#D1FAE5', '#DBEAFE', '#FCE7F3', '#F3E8FF', '#F0F9FF', '#F9FAFB'];
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id' | 'user_id'>[] = [
-  { name: 'Food & Dining', color: '#8B5CF6' },
-  { name: 'Transportation', color: '#06B6D4' },
-  { name: 'Shopping', color: '#10B981' },
-  { name: 'Entertainment', color: '#F59E0B' },
-  { name: 'Bills & Utilities', color: '#EF4444' },
-  { name: 'Healthcare', color: '#EC4899' },
+  { name: 'Food & Dining', color: '#FFFFFF' },
+  { name: 'Transportation', color: '#FEF3C7' },
+  { name: 'Shopping', color: '#D1FAE5' },
+  { name: 'Entertainment', color: '#DBEAFE' },
+  { name: 'Bills & Utilities', color: '#FCE7F3' },
+  { name: 'Healthcare', color: '#F3E8FF' },
 ];
 
 const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
@@ -54,15 +54,25 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     amount: '',
     category: '',
     name: '',
-    note: ''
+    note: '',
+    month: ''
   });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [monthlyBudget] = useState(1000);
   const [loading, setLoading] = useState(true);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>(''); // New state for selected month
 
   // Toast replacement - simple alert for now
   const toast = (options: { title: string; description: string; variant?: string }) => {
     alert(`${options.title}: ${options.description}`);
+  };
+
+  // Helper function to get current month string
+  const getCurrentMonth = () => {
+    const currentDate = new Date();
+    return currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
   };
 
   // Load data from Supabase
@@ -71,6 +81,13 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       loadUserData();
     }
   }, [session?.user?.id]);
+
+  // Set current month when component mounts
+  useEffect(() => {
+    const currentMonth = getCurrentMonth();
+    setNewExpense(prev => ({ ...prev, month: currentMonth }));
+    setSelectedMonth(currentMonth); // Set selected month to current month
+  }, []);
 
   const loadUserData = async () => {
     try {
@@ -143,10 +160,19 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         // If no categories exist, create default ones
         await createDefaultCategories();
       } else {
-        const transformedCategories: Category[] = data.map((category: any) => ({
+        // Remove duplicates by name before setting categories
+        const uniqueCategories = data.reduce((acc: any[], category: any) => {
+          const exists = acc.find(cat => cat.name === category.name);
+          if (!exists) {
+            acc.push(category);
+          }
+          return acc;
+        }, []);
+        
+        const transformedCategories: Category[] = uniqueCategories.map((category: any) => ({
           id: category.id.toString(),
           name: category.name || 'Unknown',
-          color: category.color || '#8B5CF6',
+          color: category.color || '#FFFFFF',
           user_id: category.user_id
         }));
         setCategories(transformedCategories);
@@ -192,7 +218,15 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   };
 
   const addExpense = async () => {
-    if (!newExpense.amount || !newExpense.category || !newExpense.name) {
+    console.log('Add expense called with:', newExpense); // Debug log
+    
+    if (!newExpense.amount || !newExpense.category || !newExpense.name || !newExpense.month) {
+      console.log('Validation failed:', { 
+        amount: newExpense.amount, 
+        category: newExpense.category, 
+        name: newExpense.name, 
+        month: newExpense.month 
+      }); // Debug log
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -201,74 +235,170 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       return;
     }
 
-    const currentDate = new Date();
-    const dateString = currentDate.toISOString().split('T')[0];
-    const monthString = currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+    try {
+      // Create date based on selected month (first day of the month)
+      const selectedDate = new Date(newExpense.month + ' 1');
+      const dateString = selectedDate.toISOString().split('T')[0];
+      const monthString = newExpense.month;
 
-    // Find the selected category to get its color
-    const selectedCat = categories.find(cat => cat.name === newExpense.category);
+      // Find the selected category to get its color
+      const selectedCat = categories.find(cat => cat.name === newExpense.category);
 
-    const spendingRecord = {
-      user_id: session.user.id,
-      categories: {
-        name: newExpense.category,
-        color: selectedCat?.color || '#8B5CF6'
-      },
-      spendings: {
-        amount: parseFloat(newExpense.amount),
-        name: newExpense.name,
-        note: newExpense.note || '',
-        date: dateString,
-        month: monthString
-      },
-      monthly_spending: {
-        month: monthString,
-        total: parseFloat(newExpense.amount)
-      },
-      category_breakdown: null
-    };
+      if (editingExpense) {
+        // Update existing expense
+        const updatedRecord = {
+          categories: {
+            name: newExpense.category,
+            color: selectedCat?.color || '#FFFFFF'
+          },
+          spendings: {
+            amount: parseFloat(newExpense.amount),
+            name: newExpense.name,
+            note: newExpense.note || '',
+            date: dateString,
+            month: monthString
+          }
+        };
 
-    const { data, error } = await supabase
-      .from('spending')
-      .insert(spendingRecord)
-      .select()
-      .single();
+        const { data, error } = await supabase
+          .from('spending')
+          .update(updatedRecord)
+          .eq('id', editingExpense.id)
+          .eq('user_id', session.user.id)
+          .select()
+          .single();
 
-    if (error) {
-      console.error('Error adding expense:', error);
+        if (error) {
+          console.error('Error updating expense:', error);
+          toast({
+            title: "Error",
+            description: "Failed to update expense in database",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Update local state
+        const updatedExpense: Expense = {
+          ...editingExpense,
+          amount: parseFloat(newExpense.amount),
+          category: newExpense.category,
+          name: newExpense.name,
+          note: newExpense.note || '',
+          date: dateString,
+          month: monthString
+        };
+
+        setExpenses(expenses.map(exp => exp.id === editingExpense.id ? updatedExpense : exp));
+      } else {
+        // Add new expense
+        const spendingRecord = {
+          user_id: session.user.id,
+          categories: {
+            name: newExpense.category,
+            color: selectedCat?.color || '#FFFFFF'
+          },
+          spendings: {
+            amount: parseFloat(newExpense.amount),
+            name: newExpense.name,
+            note: newExpense.note || '',
+            date: dateString,
+            month: monthString
+          }
+        };
+
+        console.log('Inserting record:', spendingRecord); // Debug log
+
+        const { data, error } = await supabase
+          .from('spending')
+          .insert(spendingRecord)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error adding expense:', error);
+          toast({
+            title: "Error",
+            description: "Failed to add expense to database",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        console.log('Insert successful:', data); // Debug log
+
+        // Add to local state
+        const newExpenseRecord: Expense = {
+          id: data.id,
+          amount: parseFloat(newExpense.amount),
+          category: newExpense.category,
+          name: newExpense.name,
+          note: newExpense.note || '',
+          date: dateString,
+          month: monthString,
+          user_id: session.user.id
+        };
+
+        setExpenses([newExpenseRecord, ...expenses]);
+      }
+
+      // Reset form
+      const currentMonth = getCurrentMonth();
+      setNewExpense({
+        amount: '',
+        category: '',
+        name: '',
+        note: '',
+        month: currentMonth
+      });
+      setEditingExpense(null);
+      setIsAddExpenseOpen(false);
+    } catch (error) {
+      console.error('Exception in addExpense:', error);
       toast({
         title: "Error",
-        description: "Failed to add expense to database",
+        description: "An unexpected error occurred",
         variant: "destructive"
       });
-      return;
     }
+  };
 
-    // Add to local state
-    const newExpenseRecord: Expense = {
-      id: data.id,
-      amount: parseFloat(newExpense.amount),
-      category: newExpense.category,
-      name: newExpense.name,
-      note: newExpense.note || '',
-      date: dateString,
-      month: monthString,
-      user_id: session.user.id
-    };
+  const deleteExpense = async (expenseId: string) => {
+    try {
+      const { error } = await supabase
+        .from('spending')
+        .delete()
+        .eq('id', expenseId)
+        .eq('user_id', session.user.id);
 
-    setExpenses([newExpenseRecord, ...expenses]);
-    setNewExpense({
-      amount: '',
-      category: '',
-      name: '',
-      note: ''
-    });
-    setIsAddExpenseOpen(false);
-    
-    toast({
-      title: "Success!",
-      description: "Expense added successfully",
-    });
+      if (error) {
+        console.error('Error deleting expense:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete expense from database",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Remove from local state
+      setExpenses(expenses.filter(exp => exp.id !== expenseId));
+      
+      // Close the dialog
+      handleCloseDialog();
+      
+      toast({
+        title: "Success!",
+        description: "Expense deleted successfully",
+      });
+    } catch (error) {
+      console.error('Exception in deleteExpense:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
   };
 
   const addCategory = async () => {
@@ -356,10 +486,57 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     });
   };
 
+  const getAvailableMonths = () => {
+    const months = [];
+    const currentDate = new Date();
+    
+    // Add previous 6 months
+    for (let i = 6; i >= 1; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      months.push(monthName);
+    }
+    
+    // Add current month and next 6 months
+    for (let i = 0; i <= 6; i++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+      const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      months.push(monthName);
+    }
+    
+    return months;
+  };
+
+  const handleEditExpense = (expense: Expense) => {
+    setEditingExpense(expense);
+    setNewExpense({
+      amount: expense.amount.toString(),
+      category: expense.category,
+      name: expense.name,
+      note: expense.note || '',
+      month: expense.month
+    });
+    setIsAddExpenseOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsAddExpenseOpen(false);
+    setEditingExpense(null);
+    const currentMonth = getCurrentMonth();
+    setNewExpense({
+      amount: '',
+      category: '',
+      name: '',
+      note: '',
+      month: currentMonth
+    });
+  };
+
+  // Updated to filter by selected month
   const getCategoryData = () => {
     const categoryTotals = categories.map(category => {
       const total = expenses
-        .filter(expense => expense.category === category.name)
+        .filter(expense => expense.category === category.name && expense.month === selectedMonth)
         .reduce((sum, expense) => sum + expense.amount, 0);
       return {
         name: category.name,
@@ -378,27 +555,55 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       return acc;
     }, {} as Record<string, number>);
 
-    // Get last 5 months
+    // Get 5 months starting from current month + offset
     const months = [];
     const now = new Date();
-    for (let i = 4; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1);
       const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
       months.push(monthName);
     }
 
     return months.map(month => ({
       month: month.split(' ')[0], // Just the month name
-      total: monthlyTotals[month] || 0
+      fullMonth: month, // Keep full month for data lookup
+      amount: monthlyTotals[month] || 0
     }));
   };
 
-  const currentMonth = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-  const currentMonthSpent = expenses
-    .filter(expense => expense.month === currentMonth)
-    .reduce((sum, expense) => sum + expense.amount, 0);
+  // Updated to use selected month
+  const getSelectedMonthSpent = () => {
+    return expenses
+      .filter(expense => expense.month === selectedMonth)
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  };
 
-  const budgetProgress = (currentMonthSpent / monthlyBudget) * 100;
+  // Updated to filter by selected month
+  const getSelectedMonthExpenses = () => {
+    return expenses
+      .filter(expense => expense.month === selectedMonth)
+      .slice(0, 10);
+  };
+
+  // Helper function to get month name only (e.g., "May" from "May 2025")
+  const getMonthName = (fullMonth: string) => {
+    return fullMonth.split(' ')[0];
+  };
+
+  // Helper function to check if selected month is current month
+  const isCurrentMonth = () => {
+    return selectedMonth === getCurrentMonth();
+  };
+
+  // Handle clicking on a bar in the chart - removed since we now handle it inline
+  // const handleBarClick = (data: any) => {
+  //   if (data && data.fullMonth) {
+  //     setSelectedMonth(data.fullMonth);
+  //   }
+  // };
+
+  const selectedMonthSpent = getSelectedMonthSpent();
+  const budgetProgress = (selectedMonthSpent / monthlyBudget) * 100;
 
   const categoryData = getCategoryData();
   const displayedCategory = selectedCategory 
@@ -422,43 +627,31 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 p-4 pb-20">
-      {/* Header with user info and sign out */}
-      <div className="max-w-4xl mx-auto mb-6">
-        <Card className="shadow-lg">
-          <CardContent className="p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                  Spending Tracker
-                </h1>
-                <p className="text-gray-600">Welcome, {session?.user?.email}!</p>
-              </div>
-              <Button 
-                onClick={() => supabase.auth.signOut()}
-                className="bg-red-500 hover:bg-red-600 text-white"
-              >
-                Sign Out
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="min-h-screen bg-white p-4 pb-20">
 
       <div className="max-w-4xl mx-auto space-y-6">
+
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100 text-sm">This Month's Spending</p>
-                  <p className="text-2xl font-bold">${currentMonthSpent.toFixed(2)} / ${monthlyBudget}</p>
+                  <p className="text-blue-100 text-sm">
+                    {isCurrentMonth() ? "This Month's Spending" : `${getMonthName(selectedMonth)}'s Spending`}
+                  </p>
+                  <p className="text-2xl font-bold">${selectedMonthSpent.toFixed(2)} / ${monthlyBudget}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-blue-200" />
               </div>
               <div className="mt-4">
-                <Progress value={budgetProgress} className="h-2 bg-blue-400" />
+                <div className="relative h-2 bg-blue-400 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-white transition-all duration-300 ease-in-out"
+                    style={{ width: `${Math.min(budgetProgress, 100)}%` }}
+                  />
+                </div>
                 <p className="text-blue-100 text-xs mt-1">
                   {budgetProgress > 100 ? 'Over budget' : `${(100 - budgetProgress).toFixed(0)}% remaining`}
                 </p>
@@ -470,35 +663,67 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-purple-100 text-sm">Top Category</p>
-                  <p className="text-lg font-bold">{displayedCategory?.name || 'No data'}</p>
-                  <p className="text-purple-200 text-sm">${displayedCategory?.value?.toFixed(2) || '0.00'}</p>
+                  <p className="text-purple-100 text-sm font-medium">
+                    {isCurrentMonth() ? "Category Breakdown" : `${getMonthName(selectedMonth)}'s Categories`}
+                  </p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <p className="text-lg font-semibold text-white">{displayedCategory?.name || 'No data'}</p>
+                    {displayedCategory && selectedMonthSpent > 0 && (
+                      <span className="text-sm text-purple-200 bg-purple-400/30 px-2 py-1 rounded">
+                        {Math.round((displayedCategory.value / selectedMonthSpent) * 100)}%
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <PieChart className="h-8 w-8 text-purple-200" />
+                <PieChartIcon className="h-5 w-5 text-purple-200" />
               </div>
-              <div className="h-32">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={20}
-                      outerRadius={50}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={entry.name === (selectedCategory || categoryData[0]?.name) ? entry.color : '#9CA3AF'} 
-                        />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="h-48 relative">
+                {categoryData.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-purple-200 text-sm">
+                    No spending data for {getMonthName(selectedMonth)}
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {categoryData.map((entry, index) => {
+                          const isSelected = entry.name === (selectedCategory || categoryData[0]?.name);
+                          return (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.color} 
+                              stroke="#8B5CF6" 
+                              strokeWidth={1}
+                              style={{
+                                filter: isSelected ? 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' : 'none',
+                                transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                                transformOrigin: 'center',
+                                transition: 'all 0.2s ease-in-out'
+                              }}
+                            />
+                          );
+                        })}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+                {/* Center content - show selected category amount */}
+                {categoryData.length > 0 && displayedCategory && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <p className="text-2xl font-bold text-white">${displayedCategory.value.toFixed(0)}</p>
+                    <p className="text-xs text-purple-200">{displayedCategory.name}</p>
+                  </div>
+                )}
               </div>
-              <p className="text-purple-100 text-xs text-center mt-2">Click to cycle categories</p>
             </CardContent>
           </Card>
         </div>
@@ -506,34 +731,45 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         {/* Recent Expenses */}
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Recent Expenses</CardTitle>
+            <CardTitle>
+              {isCurrentMonth() ? "Recent Expenses" : `${getMonthName(selectedMonth)}'s Expenses`}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {expenses.length === 0 ? (
+            {getSelectedMonthExpenses().length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No expenses yet. Start tracking by adding your first expense!</p>
+                <p>
+                  {isCurrentMonth() 
+                    ? "No expenses yet. Start tracking by adding your first expense!" 
+                    : `No expenses recorded for ${getMonthName(selectedMonth)}.`
+                  }
+                </p>
               </div>
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {expenses.slice(0, 10).map((expense) => {
+                {getSelectedMonthExpenses().map((expense) => {
                   const category = categories.find(cat => cat.name === expense.category);
                   return (
-                    <div key={expense.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div 
+                      key={expense.id} 
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                      onClick={() => handleEditExpense(expense)}
+                    >
                       <div className="flex items-center space-x-3">
                         <div 
-                          className="w-4 h-4 rounded-full" 
-                          style={{ backgroundColor: category?.color || '#gray' }}
+                          className="w-4 h-4 rounded-full border border-gray-300" 
+                          style={{ backgroundColor: category?.color || '#FFFFFF' }}
                         />
                         <div>
                           <p className="font-medium">{expense.name}</p>
                           <p className="text-sm text-gray-500">
-                            {expense.category} • {expense.date}
+                            {expense.category}
                             {expense.note && <span className="ml-2 text-gray-400">({expense.note})</span>}
                           </p>
                         </div>
                       </div>
-                      <p className="font-bold text-lg">${expense.amount.toFixed(2)}</p>
+                      <p className="text-lg">${expense.amount.toFixed(2)}</p>
                     </div>
                   );
                 })}
@@ -542,46 +778,123 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           </CardContent>
         </Card>
 
-        {/* Monthly Spending - Horizontal */}
+        {/* Monthly Spending Chart - Now serves as Month Selector */}
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-center">Monthly Spending</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-center flex-1">
+                Monthly Spending Overview
+              </CardTitle>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMonthOffset(monthOffset - 1)}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMonthOffset(monthOffset + 1)}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={getMonthlyData()} layout="horizontal" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart 
+                data={getMonthlyData()} 
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis 
-                  dataKey="month" 
-                  type="category"
-                  fontSize={12}
+                <XAxis dataKey="month" />
+                <YAxis tickFormatter={(value) => `${value}`} />
+                <Tooltip 
+                  formatter={(value) => [`${value}`, 'Amount']} 
+                  labelFormatter={(label, payload) => {
+                    const data = payload?.[0]?.payload;
+                    return data?.fullMonth || label;
+                  }}
                 />
-                <Tooltip formatter={(value) => [`$${value}`, 'Total']} />
-                <Bar dataKey="total" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                <Bar 
+                  dataKey="amount" 
+                  radius={[4, 4, 0, 0]}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(data) => {
+                    if (data && data.fullMonth) {
+                      setSelectedMonth(data.fullMonth);
+                    }
+                  }}
+                >
+                  {getMonthlyData().map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.fullMonth === selectedMonth ? "#6366F1" : "#8B5CF6"}
+                      stroke={entry.fullMonth === selectedMonth ? "#4338CA" : "none"}
+                      strokeWidth={entry.fullMonth === selectedMonth ? 2 : 0}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
+            <p className="text-sm text-gray-500 text-center mt-2">
+              Click on any bar to select that month and view its data above
+            </p>
           </CardContent>
         </Card>
+
+        {/* Sign Out Button */}
+        <div className="flex justify-center mt-6">
+          <Button 
+            onClick={() => supabase.auth.signOut()}
+            className="bg-red-400 text-white"
+          >
+            Sign Out
+          </Button>
+        </div>
       </div>
 
       {/* Floating Add Button */}
-      <Dialog open={isAddExpenseOpen} onOpenChange={setIsAddExpenseOpen}>
-        <DialogTrigger asChild>
-          <Button 
-            className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 z-50"
-            size="icon"
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-purple-50 to-blue-50 border-0 shadow-xl">
+      <Button 
+        onClick={(e) => {
+          console.log('Floating button clicked!'); // Debug log
+          e.stopPropagation();
+          setIsAddExpenseOpen(true);
+        }}
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 z-[9999]"
+        size="icon"
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
+
+      <Dialog open={isAddExpenseOpen} onOpenChange={handleCloseDialog}>
+        <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-purple-50 to-blue-50 shadow-xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              Add New Expense
+              {editingExpense ? 'Edit Expense' : 'Add New Expense'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label htmlFor="month" className="text-sm font-medium text-gray-700">Month</Label>
+              <Select value={newExpense.month} onValueChange={(value) => setNewExpense({...newExpense, month: value})}>
+                <SelectTrigger className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400">
+                  <SelectValue placeholder="Select month" />
+                </SelectTrigger>
+                <SelectContent className="bg-white max-h-48 overflow-y-auto">
+                  {getAvailableMonths().map((month) => (
+                    <SelectItem key={month} value={month}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label htmlFor="name" className="text-sm font-medium text-gray-700">Transaction Name</Label>
               <Input
@@ -616,7 +929,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                       <SelectItem key={category.id} value={category.name}>
                         <div className="flex items-center">
                           <div 
-                            className="w-3 h-3 rounded-full mr-2" 
+                            className="w-3 h-3 rounded-full mr-2 border border-gray-300" 
                             style={{ backgroundColor: category.color }}
                           />
                           {category.name}
@@ -646,12 +959,35 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                 rows={2}
               />
             </div>
-            <Button 
-              onClick={addExpense} 
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
-            >
-              Add Expense
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log('Button clicked!'); // Debug log
+                  addExpense();
+                }} 
+                type="button"
+                className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+              >
+                {editingExpense ? 'Update Expense' : 'Add Expense'}
+              </Button>
+              {editingExpense && (
+                <Button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (editingExpense) {
+                      deleteExpense(editingExpense.id);
+                    }
+                  }} 
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -690,7 +1026,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                   <div key={category.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-purple-100">
                     <div className="flex items-center">
                       <div 
-                        className="w-3 h-3 rounded-full mr-2" 
+                        className="w-3 h-3 rounded-full mr-2 border border-gray-300" 
                         style={{ backgroundColor: category.color }}
                       />
                       <span className="text-sm">{category.name}</span>
