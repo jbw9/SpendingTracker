@@ -1,0 +1,141 @@
+import React, { useState } from "react";
+import supabase from "../../../utils/supabase";
+import { EyeIcon, EyeOffIcon } from "../icons";
+
+interface CreateNewAccountProps {
+  toggleView: () => void;
+  onLogin: () => void;
+}
+
+const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
+  toggleView,
+  onLogin,
+}) => {
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Password validation
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setErrorMessage(
+        "Password must be at least 8 characters long, contain at least one uppercase letter and one number"
+      );
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: username,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        localStorage.setItem("user", JSON.stringify(data));
+        onLogin();
+      }
+    } catch (error) {
+      setErrorMessage("An error occurred. Please try again.");
+    }
+  };
+
+  return (
+    <div className="flex flex-col max-w-md mx-auto px-4">
+      <span className="text-4xl font-semibold text-center mt-16 text-black">
+        Create an Account
+      </span>
+      <form onSubmit={handleSubmit} className="mt-8">
+        <div className="space-y-4">
+          <div className="flex flex-col space-y-2">
+            <span className="text-black text-left ml-1 text-bold font-medium">
+              Full Name
+            </span>
+            <div className="bg-white w-full h-12 rounded-lg flex border border-gray-300">
+              <input
+                className="w-full px-4 bg-white outline-none placeholder-gray-400 text-black"
+                type="text"
+                placeholder="full name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col space-y-2">
+            <span className="text-black text-left ml-1 text-bold font-medium">
+              Email
+            </span>
+            <div className="bg-white w-full h-12 rounded-lg flex border border-gray-300">
+              <input
+                className="w-full px-4 bg-white outline-none placeholder-gray-400 text-black"
+                type="text"
+                placeholder="email"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col space-y-2">
+            <span className="text-black text-left ml-1 text-bold font-medium">
+              Password
+            </span>
+            <div className="bg-white w-full h-12 rounded-lg flex border border-gray-300">
+              <input
+                className="w-full px-4 bg-white outline-none placeholder-gray-400 text-black"
+                type={showPassword ? "text" : "password"}
+                placeholder="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <div
+                onClick={() => setShowPassword(!showPassword)}
+                className="px-4 cursor-pointer flex items-center"
+              >
+                {showPassword ? (
+                  <div className="h-5 w-5 text-black">
+                    <EyeIcon />
+                  </div>
+                ) : (
+                  <div className="h-5 w-5 text-black">
+                    <EyeOffIcon />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        {errorMessage && (
+          <div className="mt-4 text-red-600">{errorMessage}</div>
+        )}
+        <button
+          type="submit"
+          className="w-full h-12 bg-black rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all"
+        >
+          Sign up
+        </button>
+      </form>
+      <div className="flex justify-center my-6">
+        <span className="text-black">Already have an account?</span>
+        <button
+          className="ml-2 hover:underline text-black"
+          onClick={toggleView}
+        >
+          Login
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default CreateNewAccount;
