@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import supabase from '../utils/supabase'
-import LoginPage from './components/login/login' // Adjust this path to match your file structure
+import LoginPage from './components/login/login'
+import MainPage from './components/main/main' // Make sure this imports MainPage, not Main
 import './App.css'
 
 function App() {
@@ -44,21 +45,8 @@ function App() {
     return <LoginPage onLogin={handleLogin} />
   }
 
-  // If session exists, show main app
-  return (
-    <>
-      <div>
-        <h1>Spending Tracker</h1>
-        <p>Welcome, {session.user.email}!</p>
-        <button 
-          onClick={() => supabase.auth.signOut()}
-          className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-        >
-          Sign Out
-        </button>
-      </div>
-    </>
-  )
+  // If session exists, show main app - PASS SUPABASE AS PROP
+  return <MainPage session={session} supabase={supabase} />
 }
 
 export default App

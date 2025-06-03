@@ -16,9 +16,76 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const createDefaultCategories = async (userId: string) => {
+    const defaultCategories = [
+      { name: 'Food & Dining', color: '#8B5CF6' },
+      { name: 'Transportation', color: '#06B6D4' },
+      { name: 'Shopping', color: '#10B981' },
+      { name: 'Entertainment', color: '#F59E0B' },
+      { name: 'Bills & Utilities', color: '#EF4444' },
+      { name: 'Healthcare', color: '#EC4899' },
+    ];
+
+    const categoriesWithUser = defaultCategories.map((category) => ({
+      name: category.name,
+      color: category.color,
+      user_id: userId
+    }));
+
+    const { error } = await supabase
+      .from('categories')
+      .insert(categoriesWithUser);
+
+    if (error) {
+      console.error('Error creating default categories:', error);
+    }
+  };
+
+  const createInitialSpendingRecord = async (userId: string) => {
+    const currentMonth = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+    
+    const initialRecord = {
+      user_id: userId,
+      categories: {
+        name: 'Food & Dining',
+        color: '#8B5CF6'
+      },
+      spendings: {
+        amount: 0,
+        name: 'Welcome to Spending Tracker',
+        note: 'This is your first entry - you can delete it later',
+        date: new Date().toISOString().split('T')[0],
+        month: currentMonth
+      },
+      monthly_spending: {
+        month: currentMonth,
+        total: 0
+      },
+      category_breakdown: {
+        'Food & Dining': 0,
+        'Transportation': 0,
+        'Shopping': 0,
+        'Entertainment': 0,
+        'Bills & Utilities': 0,
+        'Healthcare': 0
+      }
+    };
+
+    const { error } = await supabase
+      .from('spending')
+      .insert(initialRecord);
+
+    if (error) {
+      console.error('Error creating initial spending record:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage("");
 
     // Password validation
     const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -26,6 +93,7 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
       setErrorMessage(
         "Password must be at least 8 characters long, contain at least one uppercase letter and one number"
       );
+      setIsLoading(false);
       return;
     }
 
@@ -42,12 +110,20 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
 
       if (error) {
         setErrorMessage(error.message);
-      } else {
+        setIsLoading(false);
+      } else if (data.user) {
+        // Create default categories and initial spending record
+        await Promise.all([
+          createDefaultCategories(data.user.id),
+          createInitialSpendingRecord(data.user.id)
+        ]);
+
         localStorage.setItem("user", JSON.stringify(data));
         onLogin();
       }
     } catch (error) {
       setErrorMessage("An error occurred. Please try again.");
+      setIsLoading(false);
     }
   };
 
@@ -69,6 +145,8 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
                 placeholder="full name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                required
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -79,10 +157,12 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
             <div className="bg-white w-full h-12 rounded-lg flex border border-gray-300">
               <input
                 className="w-full px-4 bg-white outline-none placeholder-gray-400 text-black"
-                type="text"
+                type="email"
                 placeholder="email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                required
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -97,6 +177,8 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
                 placeholder="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
               />
               <div
                 onClick={() => setShowPassword(!showPassword)}
@@ -120,9 +202,10 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
         )}
         <button
           type="submit"
-          className="w-full h-12 bg-black rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all"
+          disabled={isLoading}
+          className="w-full h-12 bg-black rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
-          Sign up
+          {isLoading ? "Creating Account..." : "Sign up"}
         </button>
       </form>
       <div className="flex justify-center my-6">
@@ -130,6 +213,7 @@ const CreateNewAccount: React.FC<CreateNewAccountProps> = ({
         <button
           className="ml-2 hover:underline text-black"
           onClick={toggleView}
+          disabled={isLoading}
         >
           Login
         </button>
