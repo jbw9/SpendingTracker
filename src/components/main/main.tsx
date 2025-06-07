@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Progress } from './ui/progress';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar, Search, Filter, X } from 'lucide-react';
 import { Textarea } from './ui/textarea';
 
 interface MainPageProps {
@@ -63,6 +63,12 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   const [monthOffset, setMonthOffset] = useState(0);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(''); // New state for selected month
+  
+  // New state for filtering and searching
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'name' | 'category'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Toast replacement - simple alert for now
   const toast = (options: { title: string; description: string; variant?: string }) => {
@@ -578,11 +584,58 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       .reduce((sum, expense) => sum + expense.amount, 0);
   };
 
-  // Updated to filter by selected month
-  const getSelectedMonthExpenses = () => {
-    return expenses
-      .filter(expense => expense.month === selectedMonth)
-      .slice(0, 10);
+  // New function to get filtered and searched expenses for the selected month
+  const getFilteredExpenses = () => {
+    let filteredExpenses = expenses.filter(expense => expense.month === selectedMonth);
+
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filteredExpenses = filteredExpenses.filter(expense => 
+        expense.name.toLowerCase().includes(searchLower) ||
+        expense.category.toLowerCase().includes(searchLower) ||
+        expense.amount.toString().includes(searchTerm) ||
+        (expense.note && expense.note.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Apply category filter
+    if (filterCategory !== 'all') {
+      filteredExpenses = filteredExpenses.filter(expense => expense.category === filterCategory);
+    }
+
+    // Apply sorting
+    filteredExpenses.sort((a, b) => {
+      let aValue: any = a[sortBy];
+      let bValue: any = b[sortBy];
+
+      if (sortBy === 'amount') {
+        aValue = a.amount;
+        bValue = b.amount;
+      } else if (sortBy === 'date') {
+        aValue = new Date(a.date);
+        bValue = new Date(b.date);
+      } else {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    return filteredExpenses;
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterCategory('all');
+    setSortBy('date');
+    setSortOrder('desc');
   };
 
   // Helper function to get month name only (e.g., "May" from "May 2025")
@@ -594,13 +647,6 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   const isCurrentMonth = () => {
     return selectedMonth === getCurrentMonth();
   };
-
-  // Handle clicking on a bar in the chart - removed since we now handle it inline
-  // const handleBarClick = (data: any) => {
-  //   if (data && data.fullMonth) {
-  //     setSelectedMonth(data.fullMonth);
-  //   }
-  // };
 
   const selectedMonthSpent = getSelectedMonthSpent();
   const budgetProgress = (selectedMonthSpent / monthlyBudget) * 100;
@@ -617,6 +663,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     const nextIndex = (currentIndex + 1) % categoryData.length;
     setSelectedCategory(categoryData[nextIndex].name);
   };
+
+  const filteredExpenses = getFilteredExpenses();
 
   if (loading) {
     return (
@@ -728,27 +776,130 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           </Card>
         </div>
 
-        {/* Recent Expenses */}
+        {/* Enhanced Expenses Section with Search and Filters */}
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>
-              {isCurrentMonth() ? "Recent Expenses" : `${getMonthName(selectedMonth)}'s Expenses`}
-            </CardTitle>
+            <div className="flex flex-col space-y-4">
+              <CardTitle>
+                {isCurrentMonth() ? "All Expenses" : `${getMonthName(selectedMonth)}'s Expenses`}
+              </CardTitle>
+              
+              {/* Search and Filter Controls */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Search Bar */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search by name, category, amount, or note..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-10"
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Category Filter */}
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        <div className="flex items-center">
+                          <div 
+                            className="w-3 h-3 rounded-full mr-2 border border-gray-300" 
+                            style={{ backgroundColor: category.color }}
+                          />
+                          {category.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Sort Options */}
+                <div className="flex gap-2">
+                  <Select value={sortBy} onValueChange={(value: 'date' | 'amount' | 'name' | 'category') => setSortBy(value)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="date">Date</SelectItem>
+                      <SelectItem value="amount">Amount</SelectItem>
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="category">Category</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="px-3"
+                  >
+                    {sortOrder === 'asc' ? '↑' : '↓'}
+                  </Button>
+                </div>
+
+                {/* Clear Filters Button */}
+                {(searchTerm || filterCategory !== 'all' || sortBy !== 'date' || sortOrder !== 'desc') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="whitespace-nowrap"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
+
+              {/* Results Summary */}
+              <div className="text-sm text-gray-600">
+                Showing {filteredExpenses.length} of {expenses.filter(e => e.month === selectedMonth).length} expenses
+                {searchTerm && ` matching "${searchTerm}"`}
+                {filterCategory !== 'all' && ` in ${filterCategory}`}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {getSelectedMonthExpenses().length === 0 ? (
+            {filteredExpenses.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>
-                  {isCurrentMonth() 
-                    ? "No expenses yet. Start tracking by adding your first expense!" 
-                    : `No expenses recorded for ${getMonthName(selectedMonth)}.`
+                  {expenses.filter(e => e.month === selectedMonth).length === 0 
+                    ? (isCurrentMonth() 
+                        ? "No expenses yet. Start tracking by adding your first expense!" 
+                        : `No expenses recorded for ${getMonthName(selectedMonth)}.`)
+                    : "No expenses match your current filters."
                   }
                 </p>
+                {(searchTerm || filterCategory !== 'all') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="mt-2"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {getSelectedMonthExpenses().map((expense) => {
+                {filteredExpenses.map((expense) => {
                   const category = categories.find(cat => cat.name === expense.category);
                   return (
                     <div 
@@ -767,9 +918,12 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                             {expense.category}
                             {expense.note && <span className="ml-2 text-gray-400">({expense.note})</span>}
                           </p>
+                          <p className="text-xs text-gray-400">
+                            {new Date(expense.date).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-lg">${expense.amount.toFixed(2)}</p>
+                      <p className="text-lg font-semibold">${expense.amount.toFixed(2)}</p>
                     </div>
                   );
                 })}
