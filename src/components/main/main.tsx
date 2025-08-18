@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Progress } from './ui/progress';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar, Search, Filter, X, Settings } from 'lucide-react';
+import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar, Search, Filter, X, Settings, Edit } from 'lucide-react';
 import { Textarea } from './ui/textarea';
-import { type Currency, DEFAULT_CURRENCY, getAllCurrencies, getUserCurrency, setUserCurrency, formatCurrency } from '../../lib/currency';
+import { type Currency, DEFAULT_CURRENCY, getAllCurrencies, getUserCurrency, setUserCurrency, formatCurrency, getCurrencySymbol } from '../../lib/currency';
+import { convertExpenseAmount, convertAmounts, convertCurrency } from '../../lib/currencyConverter';
 
 interface MainPageProps {
   session: any; // Replace with proper Session type from Supabase
@@ -35,22 +36,31 @@ interface Category {
   user_id: string;
 }
 
-const COLORS = ['#FFFFFF', '#FEF3C7', '#D1FAE5', '#DBEAFE', '#FCE7F3', '#F3E8FF', '#F0F9FF', '#F9FAFB'];
+interface MonthlyBudget {
+  id: string;
+  month: string;
+  budget: number;
+  user_id: string;
+}
+
+const COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899'];
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id' | 'user_id'>[] = [
-  { name: 'Food & Dining', color: '#FFFFFF' },
-  { name: 'Transportation', color: '#FEF3C7' },
-  { name: 'Shopping', color: '#D1FAE5' },
-  { name: 'Entertainment', color: '#DBEAFE' },
-  { name: 'Bills & Utilities', color: '#FCE7F3' },
-  { name: 'Healthcare', color: '#F3E8FF' },
+  { name: 'Food & Dining', color: '#EF4444' },
+  { name: 'Transportation', color: '#F97316' },
+  { name: 'Shopping', color: '#EAB308' },
+  { name: 'Entertainment', color: '#22C55E' },
+  { name: 'Bills & Utilities', color: '#06B6D4' },
+  { name: 'Healthcare', color: '#3B82F6' },
 ];
 
 const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [monthlyBudgets, setMonthlyBudgets] = useState<MonthlyBudget[]>([]);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isCategoryManageOpen, setIsCategoryManageOpen] = useState(false);
+  const [isBudgetEditOpen, setIsBudgetEditOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [newExpense, setNewExpense] = useState({
     amount: '',
@@ -61,7 +71,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     currency: DEFAULT_CURRENCY as Currency
   });
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [monthlyBudget] = useState(1000);
+  const [editingBudget, setEditingBudget] = useState('');
   const [loading, setLoading] = useState(true);
   const [monthOffset, setMonthOffset] = useState(0);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -69,6 +79,12 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   
   // Currency state
   const [userCurrency, setUserCurrency] = useState<Currency>(DEFAULT_CURRENCY);
+  
+  // State for converted totals (to avoid recalculating on every render)
+  const [convertedSelectedMonthSpent, setConvertedSelectedMonthSpent] = useState(0);
+  const [convertedCategoryData, setConvertedCategoryData] = useState<{ name: string; value: number; color: string }[]>([]);
+  const [convertedMonthlyData, setConvertedMonthlyData] = useState<{ month: string; amount: number; fullMonth: string }[]>([]);
+  const [currencyBreakdown, setCurrencyBreakdown] = useState<{ currency: Currency; originalAmount: number; convertedAmount: number }[]>([]);
   
   // New state for filtering and searching
   const [searchTerm, setSearchTerm] = useState('');
@@ -104,10 +120,20 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     setUserCurrency(getUserCurrency());
   }, []);
 
+  // Update converted totals when expenses, currency, or selected month changes
+  useEffect(() => {
+    if (expenses.length > 0 && selectedMonth && userCurrency) {
+      updateConvertedSelectedMonthSpent();
+      updateConvertedCategoryData();
+      updateConvertedMonthlyData();
+      updateCurrencyBreakdown();
+    }
+  }, [expenses, selectedMonth, userCurrency, categories, monthOffset]);
+
   const loadUserData = async () => {
     try {
       setLoading(true);
-      await Promise.all([loadExpenses(), loadCategories()]);
+      await Promise.all([loadExpenses(), loadCategories(), loadBudgets()]);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -231,6 +257,131 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       }));
       setCategories(transformedCategories);
     }
+  };
+
+  const loadBudgets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('monthly_budgets')
+        .select('*')
+        .eq('user_id', session.user.id);
+
+      if (error) {
+        console.error('Error loading budgets:', error);
+        return;
+      }
+
+      if (data) {
+        const transformedBudgets: MonthlyBudget[] = data.map((budget: any) => ({
+          id: budget.id.toString(),
+          month: budget.month,
+          budget: Number(budget.budget) || 1000,
+          user_id: budget.user_id
+        }));
+        setMonthlyBudgets(transformedBudgets);
+      }
+    } catch (error) {
+      console.error('Error in loadBudgets:', error);
+    }
+  };
+
+  const getCurrentMonthBudget = () => {
+    const monthBudget = monthlyBudgets.find(budget => budget.month === selectedMonth);
+    return monthBudget ? monthBudget.budget : 1000; // Default to 1000 if no budget set
+  };
+
+  const saveBudget = async () => {
+    const budgetAmount = parseFloat(editingBudget);
+    if (!budgetAmount || budgetAmount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid budget amount",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const existingBudget = monthlyBudgets.find(budget => budget.month === selectedMonth);
+      
+      if (existingBudget) {
+        // Update existing budget
+        const { data, error } = await supabase
+          .from('monthly_budgets')
+          .update({ budget: budgetAmount })
+          .eq('id', parseInt(existingBudget.id))
+          .eq('user_id', session.user.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error updating budget:', error);
+          toast({
+            title: "Error",
+            description: "Failed to update budget",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Update local state
+        setMonthlyBudgets(monthlyBudgets.map(budget => 
+          budget.id === existingBudget.id 
+            ? { ...budget, budget: budgetAmount }
+            : budget
+        ));
+      } else {
+        // Create new budget
+        const { data, error } = await supabase
+          .from('monthly_budgets')
+          .insert({
+            month: selectedMonth,
+            budget: budgetAmount,
+            user_id: session.user.id
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error creating budget:', error);
+          toast({
+            title: "Error",
+            description: "Failed to create budget",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Add to local state
+        const newBudget: MonthlyBudget = {
+          id: data.id.toString(),
+          month: selectedMonth,
+          budget: budgetAmount,
+          user_id: session.user.id
+        };
+        setMonthlyBudgets([...monthlyBudgets, newBudget]);
+      }
+
+      setIsBudgetEditOpen(false);
+      setEditingBudget('');
+      toast({
+        title: "Success!",
+        description: "Budget updated successfully",
+      });
+    } catch (error) {
+      console.error('Exception in saveBudget:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const openBudgetEdit = () => {
+    const currentBudget = getCurrentMonthBudget();
+    setEditingBudget(currentBudget.toString());
+    setIsBudgetEditOpen(true);
   };
 
   const addExpense = async () => {
@@ -601,6 +752,138 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       .reduce((sum, expense) => sum + expense.amount, 0);
   };
 
+  // NEW: Async functions to calculate converted totals
+  const updateConvertedSelectedMonthSpent = async () => {
+    const selectedMonthExpenses = expenses.filter(expense => expense.month === selectedMonth);
+    
+    if (selectedMonthExpenses.length === 0) {
+      setConvertedSelectedMonthSpent(0);
+      return;
+    }
+    
+    try {
+      const convertedAmounts = await Promise.all(
+        selectedMonthExpenses.map(expense => 
+          convertExpenseAmount(expense, userCurrency)
+        )
+      );
+      
+      const total = convertedAmounts.reduce((sum, amount) => sum + amount, 0);
+      setConvertedSelectedMonthSpent(total);
+    } catch (error) {
+      console.error('Error converting selected month expenses:', error);
+      // Fallback to original calculation
+      const originalTotal = selectedMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+      setConvertedSelectedMonthSpent(originalTotal);
+    }
+  };
+
+  const updateConvertedCategoryData = async () => {
+    const categoryTotals = await Promise.all(
+      categories.map(async (category) => {
+        const categoryExpenses = expenses.filter(
+          expense => expense.category === category.name && expense.month === selectedMonth
+        );
+        
+        if (categoryExpenses.length === 0) {
+          return { name: category.name, value: 0, color: category.color };
+        }
+        
+        const convertedAmounts = await Promise.all(
+          categoryExpenses.map(expense => convertExpenseAmount(expense, userCurrency))
+        );
+        
+        const total = convertedAmounts.reduce((sum, amount) => sum + amount, 0);
+        
+        return {
+          name: category.name,
+          value: total,
+          color: category.color
+        };
+      })
+    );
+    
+    const filteredAndSorted = categoryTotals
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+    
+    setConvertedCategoryData(filteredAndSorted);
+  };
+
+  const updateConvertedMonthlyData = async () => {
+    // Get 5 months with current month in the center
+    const months = [];
+    const now = new Date();
+    for (let i = -2; i <= 2; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1);
+      const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      months.push(monthName);
+    }
+    
+    const monthlyData = await Promise.all(
+      months.map(async (month) => {
+        const monthExpenses = expenses.filter(expense => expense.month === month);
+        
+        if (monthExpenses.length === 0) {
+          return {
+            month: month.split(' ')[0],
+            fullMonth: month,
+            amount: 0
+          };
+        }
+        
+        const convertedAmounts = await Promise.all(
+          monthExpenses.map(expense => convertExpenseAmount(expense, userCurrency))
+        );
+        
+        const total = convertedAmounts.reduce((sum, amount) => sum + amount, 0);
+        
+        return {
+          month: month.split(' ')[0],
+          fullMonth: month,
+          amount: total
+        };
+      })
+    );
+    
+    setConvertedMonthlyData(monthlyData);
+  };
+
+  const updateCurrencyBreakdown = async () => {
+    const selectedMonthExpenses = expenses.filter(expense => expense.month === selectedMonth);
+    
+    if (selectedMonthExpenses.length === 0) {
+      setCurrencyBreakdown([]);
+      return;
+    }
+    
+    // Group expenses by currency and sum them up
+    const currencyTotals = selectedMonthExpenses.reduce((acc, expense) => {
+      const currency = expense.currency;
+      acc[currency] = (acc[currency] || 0) + expense.amount;
+      return acc;
+    }, {} as Record<Currency, number>);
+    
+    try {
+      // Convert each currency total to the default currency
+      const breakdown = await Promise.all(
+        Object.entries(currencyTotals).map(async ([currency, amount]) => {
+          const convertedAmount = await convertCurrency(amount, currency as Currency, userCurrency);
+          return {
+            currency: currency as Currency,
+            originalAmount: amount,
+            convertedAmount: convertedAmount
+          };
+        })
+      );
+      
+      setCurrencyBreakdown(breakdown);
+    } catch (error) {
+      console.error('Error creating currency breakdown:', error);
+      setCurrencyBreakdown([]);
+    }
+  };
+
   // New function to get filtered and searched expenses for the selected month
   const getFilteredExpenses = () => {
     let filteredExpenses = expenses.filter(expense => expense.month === selectedMonth);
@@ -676,20 +959,39 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     return selectedMonth === getCurrentMonth();
   };
 
-  const selectedMonthSpent = getSelectedMonthSpent();
-  const budgetProgress = (selectedMonthSpent / monthlyBudget) * 100;
+  // Use converted total, fallback to original calculation if conversion hasn't completed yet
+  const selectedMonthSpent = convertedSelectedMonthSpent > 0 ? convertedSelectedMonthSpent : getSelectedMonthSpent();
+  const currentMonthBudget = getCurrentMonthBudget();
+  const budgetProgress = (selectedMonthSpent / currentMonthBudget) * 100;
 
-  const categoryData = getCategoryData();
+  // Calculate progress bar color based on budget proximity
+  const getProgressBarColor = () => {
+    if (budgetProgress <= 50) {
+      return '#FFFFFF'; // White when under 50%
+    } else if (budgetProgress <= 75) {
+      // Gradient from white to yellow (50% to 75%)
+      const factor = (budgetProgress - 50) / 25;
+      return `rgb(${255}, ${255}, ${Math.round(255 - (255 * factor))})`;
+    } else if (budgetProgress <= 90) {
+      // Gradient from yellow to orange (75% to 90%)
+      const factor = (budgetProgress - 75) / 15;
+      return `rgb(${255}, ${Math.round(255 - (100 * factor))}, 0)`;
+    } else {
+      // Red when over 90%
+      return '#EF4444';
+    }
+  };
+
+  // Use converted category totals, fallback to original calculation if conversion hasn't completed yet
+  const categoryData = convertedCategoryData.length > 0 ? convertedCategoryData : getCategoryData();
   const displayedCategory = selectedCategory 
     ? categoryData.find(cat => cat.name === selectedCategory) || categoryData[0]
     : categoryData[0];
 
-  const handlePieChartClick = () => {
-    if (categoryData.length === 0) return;
-    
-    const currentIndex = categoryData.findIndex(cat => cat.name === (selectedCategory || categoryData[0]?.name));
-    const nextIndex = (currentIndex + 1) % categoryData.length;
-    setSelectedCategory(categoryData[nextIndex].name);
+  const handlePieChartClick = (data: any) => {
+    if (data && data.name) {
+      setSelectedCategory(data.name);
+    }
   };
 
   const filteredExpenses = getFilteredExpenses();
@@ -743,25 +1045,57 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                   <p className="text-blue-100 text-sm">
                     {isCurrentMonth() ? "This Month's Spending" : `${getMonthName(selectedMonth)}'s Spending`}
                   </p>
-                  <p className="text-2xl font-bold">{formatCurrency(selectedMonthSpent, userCurrency)} / {formatCurrency(monthlyBudget, userCurrency)}</p>
+                  <div className="flex items-center space-x-2">
+                    <p className="text-2xl font-bold">{formatCurrency(selectedMonthSpent, userCurrency)} / {formatCurrency(currentMonthBudget, userCurrency)}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={openBudgetEdit}
+                      className="text-blue-200 hover:text-white hover:bg-blue-500/20 p-1 h-auto"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <TrendingUp className="h-8 w-8 text-blue-200" />
               </div>
               <div className="mt-4">
                 <div className="relative h-2 bg-blue-400 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-white transition-all duration-300 ease-in-out"
-                    style={{ width: `${Math.min(budgetProgress, 100)}%` }}
+                    className="h-full transition-all duration-300 ease-in-out"
+                    style={{ 
+                      width: `${Math.min(budgetProgress, 100)}%`,
+                      backgroundColor: getProgressBarColor()
+                    }}
                   />
                 </div>
                 <p className="text-blue-100 text-xs mt-1">
                   {budgetProgress > 100 ? 'Over budget' : `${(100 - budgetProgress).toFixed(0)}% remaining`}
                 </p>
+                
+                {/* Currency breakdown - only show if multiple currencies */}
+                {currencyBreakdown.length > 1 && (
+                  <div className="mt-3 pt-3 border-t border-blue-400/30">
+                    <p className="text-blue-100 text-xs mb-2 font-medium">Currency Breakdown:</p>
+                    <div className="space-y-1">
+                      {currencyBreakdown.map((item) => (
+                        <div key={item.currency} className="flex justify-between items-center text-xs">
+                          <span className="text-blue-200">
+                            {getCurrencySymbol(item.currency)} {formatCurrency(item.originalAmount, item.currency).replace(/^[^0-9]*/, '')}
+                          </span>
+                          <span className="text-blue-100">
+                            → {formatCurrency(item.convertedAmount, userCurrency)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white border-0 shadow-lg cursor-pointer" onClick={handlePieChartClick}>
+          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white border-0 shadow-lg">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -796,6 +1130,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                         paddingAngle={2}
                         dataKey="value"
                         stroke="none"
+                        onClick={handlePieChartClick}
                       >
                         {categoryData.map((entry, index) => {
                           const isSelected = entry.name === (selectedCategory || categoryData[0]?.name);
@@ -1016,7 +1351,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart 
-                data={getMonthlyData()} 
+                data={convertedMonthlyData.length > 0 ? convertedMonthlyData : getMonthlyData()} 
                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
@@ -1039,7 +1374,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                     }
                   }}
                 >
-                  {getMonthlyData().map((entry, index) => (
+                  {(convertedMonthlyData.length > 0 ? convertedMonthlyData : getMonthlyData()).map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={entry.fullMonth === selectedMonth ? "#6366F1" : "#8B5CF6"}
@@ -1271,6 +1606,49 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Budget Edit Dialog */}
+      <Dialog open={isBudgetEditOpen} onOpenChange={setIsBudgetEditOpen}>
+        <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-blue-50 to-indigo-50 border-0 shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              Set Budget for {getMonthName(selectedMonth)}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="budget" className="text-sm font-medium text-gray-700">Monthly Budget</Label>
+              <Input
+                id="budget"
+                type="number"
+                step="0.01"
+                value={editingBudget}
+                onChange={(e) => setEditingBudget(e.target.value)}
+                placeholder="Enter budget amount"
+                className="mt-1 border-blue-200 focus:border-blue-400 focus:ring-blue-400"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Set your spending limit for {selectedMonth}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={saveBudget}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+              >
+                Save Budget
+              </Button>
+              <Button 
+                onClick={() => setIsBudgetEditOpen(false)}
+                variant="outline"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </DialogContent>
