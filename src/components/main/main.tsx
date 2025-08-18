@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Progress } from './ui/progress';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar, Search, Filter, X } from 'lucide-react';
+import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar, Search, Filter, X, Settings } from 'lucide-react';
 import { Textarea } from './ui/textarea';
+import { type Currency, DEFAULT_CURRENCY, getAllCurrencies, getUserCurrency, setUserCurrency, formatCurrency } from '../../lib/currency';
 
 interface MainPageProps {
   session: any; // Replace with proper Session type from Supabase
@@ -23,6 +24,7 @@ interface Expense {
   note?: string;
   date: string;
   month: string;
+  currency: Currency;
   user_id: string;
 }
 
@@ -55,7 +57,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     category: '',
     name: '',
     note: '',
-    month: ''
+    month: '',
+    currency: DEFAULT_CURRENCY as Currency
   });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [monthlyBudget] = useState(1000);
@@ -63,6 +66,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   const [monthOffset, setMonthOffset] = useState(0);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(''); // New state for selected month
+  
+  // Currency state
+  const [userCurrency, setUserCurrency] = useState<Currency>(DEFAULT_CURRENCY);
   
   // New state for filtering and searching
   const [searchTerm, setSearchTerm] = useState('');
@@ -93,6 +99,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     const currentMonth = getCurrentMonth();
     setNewExpense(prev => ({ ...prev, month: currentMonth }));
     setSelectedMonth(currentMonth); // Set selected month to current month
+    
+    // Initialize user currency from localStorage
+    setUserCurrency(getUserCurrency());
   }, []);
 
   const loadUserData = async () => {
@@ -143,6 +152,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           note: spending.note || '',
           date: spending.date || new Date().toISOString().split('T')[0],
           month: spending.month || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+          currency: spending.currency || DEFAULT_CURRENCY,
           user_id: record.user_id
         };
       });
@@ -262,7 +272,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
             name: newExpense.name,
             note: newExpense.note || '',
             date: dateString,
-            month: monthString
+            month: monthString,
+            currency: newExpense.currency
           }
         };
 
@@ -292,7 +303,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           name: newExpense.name,
           note: newExpense.note || '',
           date: dateString,
-          month: monthString
+          month: monthString,
+          currency: newExpense.currency
         };
 
         setExpenses(expenses.map(exp => exp.id === editingExpense.id ? updatedExpense : exp));
@@ -309,7 +321,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
             name: newExpense.name,
             note: newExpense.note || '',
             date: dateString,
-            month: monthString
+            month: monthString,
+            currency: newExpense.currency
           }
         };
 
@@ -342,6 +355,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           note: newExpense.note || '',
           date: dateString,
           month: monthString,
+          currency: newExpense.currency,
           user_id: session.user.id
         };
 
@@ -355,7 +369,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         category: '',
         name: '',
         note: '',
-        month: currentMonth
+        month: currentMonth,
+        currency: userCurrency
       });
       setEditingExpense(null);
       setIsAddExpenseOpen(false);
@@ -520,7 +535,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       category: expense.category,
       name: expense.name,
       note: expense.note || '',
-      month: expense.month
+      month: expense.month,
+      currency: expense.currency
     });
     setIsAddExpenseOpen(true);
   };
@@ -534,7 +550,8 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       category: '',
       name: '',
       note: '',
-      month: currentMonth
+      month: currentMonth,
+      currency: userCurrency
     });
   };
 
@@ -561,10 +578,10 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       return acc;
     }, {} as Record<string, number>);
 
-    // Get 5 months starting from current month + offset
+    // Get 5 months with current month in the center (2 before, current, 2 after)
     const months = [];
     const now = new Date();
-    for (let i = 0; i < 5; i++) {
+    for (let i = -2; i <= 2; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + monthOffset + i, 1);
       const monthName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
       months.push(monthName);
@@ -637,6 +654,17 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     setSortBy('date');
     setSortOrder('desc');
   };
+  
+  // Handle currency change
+  const handleCurrencyChange = (currency: Currency) => {
+    // Update state and save to localStorage
+    setUserCurrency(currency);
+    setUserCurrency(currency);
+    toast({
+      title: "Currency Updated", 
+      description: `Default currency changed to ${currency}`,
+    });
+  };
 
   // Helper function to get month name only (e.g., "May" from "May 2025")
   const getMonthName = (fullMonth: string) => {
@@ -678,7 +706,33 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     <div className="min-h-screen bg-white p-4 pb-20">
 
       <div className="max-w-4xl mx-auto space-y-6">
-
+        
+        {/* Header with Currency Selector */}
+        <div className="flex justify-between items-center p-4 bg-white rounded-lg shadow-md">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Spending Tracker</h1>
+            <p className="text-gray-600">Track your expenses across multiple currencies</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Label className="text-sm font-medium text-gray-700">Currency:</Label>
+            <Select value={userCurrency} onValueChange={(value: Currency) => handleCurrencyChange(value)}>
+              <SelectTrigger className="w-32">
+                <Settings className="h-4 w-4 mr-1" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {getAllCurrencies().map((currency) => (
+                  <SelectItem key={currency.code} value={currency.code}>
+                    <div className="flex items-center space-x-2">
+                      <span>{currency.symbol}</span>
+                      <span>{currency.code}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -689,7 +743,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                   <p className="text-blue-100 text-sm">
                     {isCurrentMonth() ? "This Month's Spending" : `${getMonthName(selectedMonth)}'s Spending`}
                   </p>
-                  <p className="text-2xl font-bold">${selectedMonthSpent.toFixed(2)} / ${monthlyBudget}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(selectedMonthSpent, userCurrency)} / {formatCurrency(monthlyBudget, userCurrency)}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-blue-200" />
               </div>
@@ -767,7 +821,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                 {/* Center content - show selected category amount */}
                 {categoryData.length > 0 && displayedCategory && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <p className="text-2xl font-bold text-white">${displayedCategory.value.toFixed(0)}</p>
+                    <p className="text-2xl font-bold text-white">{formatCurrency(displayedCategory.value, userCurrency)}</p>
                     <p className="text-xs text-purple-200">{displayedCategory.name}</p>
                   </div>
                 )}
@@ -923,7 +977,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                           </p>
                         </div>
                       </div>
-                      <p className="text-lg font-semibold">${expense.amount.toFixed(2)}</p>
+                      <p className="text-lg font-semibold">{formatCurrency(expense.amount, expense.currency)}</p>
                     </div>
                   );
                 })}
@@ -967,9 +1021,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => `${value}`} />
+                <YAxis tickFormatter={(value) => formatCurrency(value, userCurrency)} />
                 <Tooltip 
-                  formatter={(value) => [`${value}`, 'Amount']} 
+                  formatter={(value) => [formatCurrency(Number(value), userCurrency), 'Amount']} 
                   labelFormatter={(label, payload) => {
                     const data = payload?.[0]?.payload;
                     return data?.fullMonth || label;
@@ -1059,17 +1113,38 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                 className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
               />
             </div>
-            <div>
-              <Label htmlFor="amount" className="text-sm font-medium text-gray-700">Amount ($)</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                value={newExpense.amount}
-                onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
-                placeholder="0.00"
-                className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="amount" className="text-sm font-medium text-gray-700">Amount</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  value={newExpense.amount}
+                  onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+                  placeholder="0.00"
+                  className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
+                />
+              </div>
+              <div>
+                <Label htmlFor="currency" className="text-sm font-medium text-gray-700">Currency</Label>
+                <Select value={newExpense.currency} onValueChange={(value: Currency) => setNewExpense({...newExpense, currency: value})}>
+                  <SelectTrigger className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getAllCurrencies().map((currency) => (
+                      <SelectItem key={currency.code} value={currency.code}>
+                        <div className="flex items-center space-x-2">
+                          <span>{currency.symbol}</span>
+                          <span>{currency.code}</span>
+                          <span className="text-xs text-gray-500">({currency.name})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <Label htmlFor="category" className="text-sm font-medium text-gray-700">Category</Label>
