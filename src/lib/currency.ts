@@ -38,7 +38,7 @@ export function formatCurrency(amount: number, currency: Currency = DEFAULT_CURR
   if (currency === 'IDR') {
     // For IDR, format with thousands separator but no decimals
     const rounded = Math.round(amount);
-    const formatted = rounded.toLocaleString('id-ID');
+    const formatted = rounded.toLocaleString('en-US');
     return `${currencyInfo.symbol} ${formatted}`;
   }
   

@@ -286,12 +286,22 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   };
 
   const getCurrentMonthBudget = () => {
-    const monthBudget = monthlyBudgets.find(budget => budget.month === selectedMonth);
+    // Convert selectedMonth to YYYY-MM format for comparison
+    const monthDate = new Date(selectedMonth + ' 1');
+    const monthFormatted = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    const monthBudget = monthlyBudgets.find(budget => {
+      // Check both formats for backward compatibility
+      if (budget.month === selectedMonth) return true;
+      return budget.month === monthFormatted;
+    });
     return monthBudget ? monthBudget.budget : 1000; // Default to 1000 if no budget set
   };
 
   const saveBudget = async () => {
-    const budgetAmount = parseFloat(editingBudget);
+    // Remove commas before parsing
+    const cleanBudget = editingBudget.replace(/,/g, '');
+    const budgetAmount = parseFloat(cleanBudget);
     if (!budgetAmount || budgetAmount <= 0) {
       toast({
         title: "Error",
@@ -302,7 +312,17 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     }
 
     try {
-      const existingBudget = monthlyBudgets.find(budget => budget.month === selectedMonth);
+      // Convert month from "November 2024" to "2024-11" format
+      const monthDate = new Date(selectedMonth + ' 1');
+      const monthFormatted = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      const existingBudget = monthlyBudgets.find(budget => {
+        // Check both formats for backward compatibility
+        if (budget.month === selectedMonth) return true;
+        const budgetDate = new Date(budget.month + ' 1');
+        const budgetFormatted = `${budgetDate.getFullYear()}-${String(budgetDate.getMonth() + 1).padStart(2, '0')}`;
+        return budgetFormatted === monthFormatted;
+      });
       
       if (existingBudget) {
         // Update existing budget
@@ -335,7 +355,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         const { data, error } = await supabase
           .from('monthly_budgets')
           .insert({
-            month: selectedMonth,
+            month: monthFormatted,  // Use the formatted month (YYYY-MM)
             budget: budgetAmount,
             user_id: session.user.id
           })
@@ -380,8 +400,47 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
   const openBudgetEdit = () => {
     const currentBudget = getCurrentMonthBudget();
-    setEditingBudget(currentBudget.toString());
+    // Format the number with commas when opening
+    setEditingBudget(currentBudget.toLocaleString('en-US'));
     setIsBudgetEditOpen(true);
+  };
+  
+  // Helper function to format number input with commas
+  const handleBudgetInputChange = (value: string) => {
+    // Remove all non-digit characters except decimal point
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    
+    // Split by decimal point
+    const parts = cleanValue.split('.');
+    
+    // Format the integer part with commas
+    if (parts[0]) {
+      parts[0] = parseInt(parts[0] || '0').toLocaleString('en-US');
+    }
+    
+    // Rejoin with decimal if exists
+    const formattedValue = parts.length > 1 ? `${parts[0]}.${parts[1].slice(0, 2)}` : parts[0];
+    
+    setEditingBudget(formattedValue);
+  };
+  
+  // Helper function to format expense amount input with commas
+  const handleExpenseAmountChange = (value: string) => {
+    // Remove all non-digit characters except decimal point
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    
+    // Split by decimal point
+    const parts = cleanValue.split('.');
+    
+    // Format the integer part with commas
+    if (parts[0]) {
+      parts[0] = parseInt(parts[0] || '0').toLocaleString('en-US');
+    }
+    
+    // Rejoin with decimal if exists
+    const formattedValue = parts.length > 1 ? `${parts[0]}.${parts[1].slice(0, 2)}` : parts[0];
+    
+    setNewExpense({...newExpense, amount: formattedValue});
   };
 
   const addExpense = async () => {
@@ -401,6 +460,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       });
       return;
     }
+    
+    // Remove commas from amount before parsing
+    const cleanAmount = newExpense.amount.toString().replace(/,/g, '');
 
     try {
       // Create date based on selected month (first day of the month)
@@ -419,7 +481,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
             color: selectedCat?.color || '#FFFFFF'
           },
           spendings: {
-            amount: parseFloat(newExpense.amount),
+            amount: parseFloat(cleanAmount),
             name: newExpense.name,
             note: newExpense.note || '',
             date: dateString,
@@ -449,7 +511,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         // Update local state
         const updatedExpense: Expense = {
           ...editingExpense,
-          amount: parseFloat(newExpense.amount),
+          amount: parseFloat(cleanAmount),
           category: newExpense.category,
           name: newExpense.name,
           note: newExpense.note || '',
@@ -468,7 +530,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
             color: selectedCat?.color || '#FFFFFF'
           },
           spendings: {
-            amount: parseFloat(newExpense.amount),
+            amount: parseFloat(cleanAmount),
             name: newExpense.name,
             note: newExpense.note || '',
             date: dateString,
@@ -500,7 +562,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         // Add to local state
         const newExpenseRecord: Expense = {
           id: data.id,
-          amount: parseFloat(newExpense.amount),
+          amount: parseFloat(cleanAmount),
           category: newExpense.category,
           name: newExpense.name,
           note: newExpense.note || '',
@@ -682,7 +744,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   const handleEditExpense = (expense: Expense) => {
     setEditingExpense(expense);
     setNewExpense({
-      amount: expense.amount.toString(),
+      amount: expense.amount.toLocaleString('en-US'),  // Format with commas
       category: expense.category,
       name: expense.name,
       note: expense.note || '',
@@ -1013,7 +1075,6 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         <div className="flex justify-between items-center p-4 bg-white rounded-lg shadow-md">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Spending Tracker</h1>
-            <p className="text-gray-600">Track your expenses across multiple currencies</p>
           </div>
           <div className="flex items-center space-x-3">
             <Label className="text-sm font-medium text-gray-700">Currency:</Label>
@@ -1453,10 +1514,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                 <Label htmlFor="amount" className="text-sm font-medium text-gray-700">Amount</Label>
                 <Input
                   id="amount"
-                  type="number"
-                  step="0.01"
+                  type="text"
                   value={newExpense.amount}
-                  onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+                  onChange={(e) => handleExpenseAmountChange(e.target.value)}
                   placeholder="0.00"
                   className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
                 />
@@ -1624,10 +1684,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
               <Label htmlFor="budget" className="text-sm font-medium text-gray-700">Monthly Budget</Label>
               <Input
                 id="budget"
-                type="number"
-                step="0.01"
+                type="text"
                 value={editingBudget}
-                onChange={(e) => setEditingBudget(e.target.value)}
+                onChange={(e) => handleBudgetInputChange(e.target.value)}
                 placeholder="Enter budget amount"
                 className="mt-1 border-blue-200 focus:border-blue-400 focus:ring-blue-400"
               />
