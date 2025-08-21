@@ -9,7 +9,7 @@ import { Progress } from './ui/progress';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { Plus, Wallet, TrendingUp, PieChartIcon, Trash2, ChevronLeft, ChevronRight, Calendar, Search, Filter, X, Settings, Edit } from 'lucide-react';
 import { Textarea } from './ui/textarea';
-import { type Currency, DEFAULT_CURRENCY, getAllCurrencies, getUserCurrency, setUserCurrency, formatCurrency, getCurrencySymbol } from '../../lib/currency';
+import { type Currency, DEFAULT_CURRENCY, getAllCurrencies, getUserCurrency, setUserCurrency as saveUserCurrency, formatCurrency, getCurrencySymbol } from '../../lib/currency';
 import { convertExpenseAmount, convertAmounts, convertCurrency } from '../../lib/currencyConverter';
 
 interface MainPageProps {
@@ -167,7 +167,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
           if (!insertError && newPrefs) {
             setUserCurrency(newPrefs.preferred_currency as Currency);
-            setUserCurrency(newPrefs.preferred_currency as Currency); // Also save to localStorage
+            saveUserCurrency(newPrefs.preferred_currency as Currency); // Also save to localStorage
           }
         }
         console.error('Error loading preferences:', error);
@@ -175,7 +175,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         setUserCurrency(getUserCurrency());
       } else if (data) {
         setUserCurrency(data.preferred_currency as Currency);
-        setUserCurrency(data.preferred_currency as Currency); // Also save to localStorage
+        saveUserCurrency(data.preferred_currency as Currency); // Also save to localStorage
       }
     } catch (error) {
       console.error('Error in loadUserPreferences:', error);
@@ -337,32 +337,36 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     return monthBudget || { budget: 1000, currency: userCurrency }; // Default to 1000 in user's currency if no budget set
   };
 
-  const [convertedBudget, setConvertedBudget] = useState(0);
+  const [convertedBudget, setConvertedBudget] = useState(1000); // Initialize with default budget
   const [loadingBudgetConversion, setLoadingBudgetConversion] = useState(false);
 
   // Update budget conversion when currency or budget changes
   useEffect(() => {
     const updateConvertedBudget = async () => {
       const monthBudget = getCurrentMonthBudget();
-      if (monthBudget && monthBudget.budget) {
+      if (monthBudget) {
+        const budgetValue = monthBudget.budget || 1000; // Default to 1000 if no budget
         setLoadingBudgetConversion(true);
         try {
           const converted = await convertCurrency(
-            monthBudget.budget,
+            budgetValue,
             monthBudget.currency || DEFAULT_CURRENCY,
             userCurrency
           );
           setConvertedBudget(converted);
         } catch (error) {
           console.error('Error converting budget:', error);
-          setConvertedBudget(monthBudget.budget);
+          setConvertedBudget(budgetValue);
         } finally {
           setLoadingBudgetConversion(false);
         }
+      } else {
+        // If no budget at all, set default
+        setConvertedBudget(1000);
       }
     };
     
-    if (selectedMonth && userCurrency && monthlyBudgets.length >= 0) {
+    if (selectedMonth && userCurrency) {
       updateConvertedBudget();
     }
   }, [selectedMonth, userCurrency, monthlyBudgets]);
@@ -1080,7 +1084,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   const handleCurrencyChange = async (currency: Currency) => {
     // Update state and save to localStorage
     setUserCurrency(currency);
-    setUserCurrency(currency); // Save to localStorage
+    saveUserCurrency(currency); // Save to localStorage
     
     // Save to database
     try {
@@ -1101,6 +1105,30 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           variant: "destructive"
         });
       } else {
+        // Immediately trigger conversion updates for instant feedback
+        if (expenses.length > 0 && selectedMonth) {
+          updateConvertedSelectedMonthSpent();
+          updateConvertedCategoryData();
+          updateConvertedMonthlyData();
+          updateCurrencyBreakdown();
+        }
+        
+        // Update budget conversion immediately
+        const monthBudget = getCurrentMonthBudget();
+        if (monthBudget && monthBudget.budget) {
+          try {
+            const converted = await convertCurrency(
+              monthBudget.budget,
+              monthBudget.currency || DEFAULT_CURRENCY,
+              currency // Use the new currency
+            );
+            setConvertedBudget(converted);
+          } catch (err) {
+            console.error('Error converting budget:', err);
+            setConvertedBudget(monthBudget.budget);
+          }
+        }
+        
         toast({
           title: "Currency Updated", 
           description: `Default currency changed to ${currency}`,
@@ -1124,7 +1152,10 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   // Use converted total, fallback to original calculation if conversion hasn't completed yet
   const selectedMonthSpent = convertedSelectedMonthSpent > 0 ? convertedSelectedMonthSpent : getSelectedMonthSpent();
   const currentMonthBudget = getCurrentMonthBudget();
-  const budgetProgress = (selectedMonthSpent / currentMonthBudget) * 100;
+  // Use convertedBudget for calculations (or fallback to budget property if conversion not ready)
+  const budgetAmount = convertedBudget > 0 ? convertedBudget : (currentMonthBudget.budget || 1000);
+  // Ensure budgetProgress is never NaN
+  const budgetProgress = budgetAmount > 0 ? (selectedMonthSpent / budgetAmount) * 100 : 0;
 
   // Calculate progress bar color based on budget proximity
   const getProgressBarColor = () => {
@@ -1207,7 +1238,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                     {isCurrentMonth() ? "This Month's Spending" : `${getMonthName(selectedMonth)}'s Spending`}
                   </p>
                   <div className="flex items-center space-x-2">
-                    <p className="text-2xl font-bold">{formatCurrency(selectedMonthSpent, userCurrency)} / {formatCurrency(currentMonthBudget, userCurrency)}</p>
+                    <p className="text-2xl font-bold">{formatCurrency(selectedMonthSpent, userCurrency)} / {formatCurrency(budgetAmount, userCurrency)}</p>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1231,7 +1262,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                   />
                 </div>
                 <p className="text-blue-100 text-xs mt-1">
-                  {budgetProgress > 100 ? 'Over budget' : `${(100 - budgetProgress).toFixed(0)}% remaining`}
+                  {isNaN(budgetProgress) ? '100% remaining' : budgetProgress > 100 ? 'Over budget' : `${(100 - budgetProgress).toFixed(0)}% remaining`}
                 </p>
                 
                 {/* Currency breakdown - only show if multiple currencies */}
