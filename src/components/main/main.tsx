@@ -40,6 +40,7 @@ interface MonthlyBudget {
   id: string;
   month: string;
   budget: number;
+  currency: Currency;
   user_id: string;
 }
 
@@ -107,6 +108,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   useEffect(() => {
     if (session?.user?.id) {
       loadUserData();
+      loadUserPreferences();
     }
   }, [session?.user?.id]);
 
@@ -115,9 +117,6 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     const currentMonth = getCurrentMonth();
     setNewExpense(prev => ({ ...prev, month: currentMonth }));
     setSelectedMonth(currentMonth); // Set selected month to current month
-    
-    // Initialize user currency from localStorage
-    setUserCurrency(getUserCurrency());
   }, []);
 
   // Update converted totals when expenses, currency, or selected month changes
@@ -143,6 +142,45 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUserPreferences = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('preferred_currency')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (error) {
+        // If no preferences exist, create them
+        if (error.code === 'PGRST116') {
+          const { data: newPrefs, error: insertError } = await supabase
+            .from('user_preferences')
+            .insert({
+              user_id: session.user.id,
+              preferred_currency: DEFAULT_CURRENCY
+            })
+            .select()
+            .single();
+
+          if (!insertError && newPrefs) {
+            setUserCurrency(newPrefs.preferred_currency as Currency);
+            setUserCurrency(newPrefs.preferred_currency as Currency); // Also save to localStorage
+          }
+        }
+        console.error('Error loading preferences:', error);
+        // Fallback to localStorage
+        setUserCurrency(getUserCurrency());
+      } else if (data) {
+        setUserCurrency(data.preferred_currency as Currency);
+        setUserCurrency(data.preferred_currency as Currency); // Also save to localStorage
+      }
+    } catch (error) {
+      console.error('Error in loadUserPreferences:', error);
+      // Fallback to localStorage
+      setUserCurrency(getUserCurrency());
     }
   };
 
@@ -276,6 +314,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           id: budget.id.toString(),
           month: budget.month,
           budget: Number(budget.budget) || 1000,
+          currency: budget.currency || DEFAULT_CURRENCY,
           user_id: budget.user_id
         }));
         setMonthlyBudgets(transformedBudgets);
@@ -295,8 +334,38 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       if (budget.month === selectedMonth) return true;
       return budget.month === monthFormatted;
     });
-    return monthBudget ? monthBudget.budget : 1000; // Default to 1000 if no budget set
+    return monthBudget || { budget: 1000, currency: userCurrency }; // Default to 1000 in user's currency if no budget set
   };
+
+  const [convertedBudget, setConvertedBudget] = useState(0);
+  const [loadingBudgetConversion, setLoadingBudgetConversion] = useState(false);
+
+  // Update budget conversion when currency or budget changes
+  useEffect(() => {
+    const updateConvertedBudget = async () => {
+      const monthBudget = getCurrentMonthBudget();
+      if (monthBudget && monthBudget.budget) {
+        setLoadingBudgetConversion(true);
+        try {
+          const converted = await convertCurrency(
+            monthBudget.budget,
+            monthBudget.currency || DEFAULT_CURRENCY,
+            userCurrency
+          );
+          setConvertedBudget(converted);
+        } catch (error) {
+          console.error('Error converting budget:', error);
+          setConvertedBudget(monthBudget.budget);
+        } finally {
+          setLoadingBudgetConversion(false);
+        }
+      }
+    };
+    
+    if (selectedMonth && userCurrency && monthlyBudgets.length >= 0) {
+      updateConvertedBudget();
+    }
+  }, [selectedMonth, userCurrency, monthlyBudgets]);
 
   const saveBudget = async () => {
     // Remove commas before parsing
@@ -325,10 +394,13 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       });
       
       if (existingBudget) {
-        // Update existing budget
+        // Update existing budget with currency
         const { data, error } = await supabase
           .from('monthly_budgets')
-          .update({ budget: budgetAmount })
+          .update({ 
+            budget: budgetAmount,
+            currency: userCurrency
+          })
           .eq('id', parseInt(existingBudget.id))
           .eq('user_id', session.user.id)
           .select()
@@ -347,16 +419,17 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         // Update local state
         setMonthlyBudgets(monthlyBudgets.map(budget => 
           budget.id === existingBudget.id 
-            ? { ...budget, budget: budgetAmount }
+            ? { ...budget, budget: budgetAmount, currency: userCurrency }
             : budget
         ));
       } else {
-        // Create new budget
+        // Create new budget with currency
         const { data, error } = await supabase
           .from('monthly_budgets')
           .insert({
             month: monthFormatted,  // Use the formatted month (YYYY-MM)
             budget: budgetAmount,
+            currency: userCurrency,
             user_id: session.user.id
           })
           .select()
@@ -377,6 +450,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           id: data.id.toString(),
           month: selectedMonth,
           budget: budgetAmount,
+          currency: userCurrency,
           user_id: session.user.id
         };
         setMonthlyBudgets([...monthlyBudgets, newBudget]);
@@ -399,9 +473,11 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   };
 
   const openBudgetEdit = () => {
-    const currentBudget = getCurrentMonthBudget();
+    const monthBudget = getCurrentMonthBudget();
+    // Use the converted budget value for display
+    const displayBudget = convertedBudget > 0 ? convertedBudget : monthBudget.budget;
     // Format the number with commas when opening
-    setEditingBudget(currentBudget.toLocaleString('en-US'));
+    setEditingBudget(displayBudget.toLocaleString('en-US'));
     setIsBudgetEditOpen(true);
   };
   
@@ -1001,14 +1077,38 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
   };
   
   // Handle currency change
-  const handleCurrencyChange = (currency: Currency) => {
+  const handleCurrencyChange = async (currency: Currency) => {
     // Update state and save to localStorage
     setUserCurrency(currency);
-    setUserCurrency(currency);
-    toast({
-      title: "Currency Updated", 
-      description: `Default currency changed to ${currency}`,
-    });
+    setUserCurrency(currency); // Save to localStorage
+    
+    // Save to database
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: session.user.id,
+          preferred_currency: currency
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) {
+        console.error('Error saving currency preference:', error);
+        toast({
+          title: "Warning",
+          description: `Currency changed locally but failed to save to database`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Currency Updated", 
+          description: `Default currency changed to ${currency}`,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating currency:', error);
+    }
   };
 
   // Helper function to get month name only (e.g., "May" from "May 2025")
@@ -1691,7 +1791,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                 className="mt-1 border-blue-200 focus:border-blue-400 focus:ring-blue-400"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Set your spending limit for {selectedMonth}
+                Set your spending limit for {selectedMonth} in {getCurrencySymbol(userCurrency)} ({userCurrency})
               </p>
             </div>
             <div className="flex gap-2">
