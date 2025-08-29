@@ -17,6 +17,11 @@ interface MainPageProps {
   supabase: any; // Replace with proper Supabase client type
 }
 
+interface ColorPickerProps {
+  selectedColor: string;
+  onColorChange: (color: string) => void;
+}
+
 interface Expense {
   id: string;
   amount: number;
@@ -44,7 +49,32 @@ interface MonthlyBudget {
   user_id: string;
 }
 
-const COLORS = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899'];
+// Expanded color palette with more options for categories
+const COLOR_PALETTE = [
+  { name: 'Red', value: '#EF4444' },
+  { name: 'Orange', value: '#F97316' },
+  { name: 'Amber', value: '#F59E0B' },
+  { name: 'Yellow', value: '#EAB308' },
+  { name: 'Lime', value: '#84CC16' },
+  { name: 'Green', value: '#22C55E' },
+  { name: 'Emerald', value: '#10B981' },
+  { name: 'Teal', value: '#14B8A6' },
+  { name: 'Cyan', value: '#06B6D4' },
+  { name: 'Sky', value: '#0EA5E9' },
+  { name: 'Blue', value: '#3B82F6' },
+  { name: 'Indigo', value: '#6366F1' },
+  { name: 'Violet', value: '#8B5CF6' },
+  { name: 'Purple', value: '#A855F7' },
+  { name: 'Fuchsia', value: '#D946EF' },
+  { name: 'Pink', value: '#EC4899' },
+  { name: 'Rose', value: '#F43F5E' },
+  { name: 'Gray', value: '#6B7280' },
+  { name: 'Slate', value: '#475569' },
+  { name: 'Black', value: '#000000' }
+];
+
+// Legacy COLORS array for backward compatibility
+const COLORS = COLOR_PALETTE.slice(0, 8).map(c => c.value);
 
 const DEFAULT_CATEGORIES: Omit<Category, 'id' | 'user_id'>[] = [
   { name: 'Food & Dining', color: '#EF4444' },
@@ -72,6 +102,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     currency: DEFAULT_CURRENCY as Currency
   });
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState(COLOR_PALETTE[0].value);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryColor, setEditingCategoryColor] = useState<string>('');
   const [editingBudget, setEditingBudget] = useState('');
   const [loading, setLoading] = useState(true);
   const [monthOffset, setMonthOffset] = useState(0);
@@ -727,7 +760,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
     const newCategoryData = {
       name: newCategoryName.trim(),
-      color: COLORS[categories.length % COLORS.length],
+      color: newCategoryColor,
       user_id: session.user.id
     };
 
@@ -756,6 +789,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
     setCategories([...categories, newCategory]);
     setNewCategoryName('');
+    setNewCategoryColor(COLOR_PALETTE[0].value);
     toast({
       title: "Success!",
       description: "Category added successfully",
@@ -798,6 +832,58 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       title: "Success!",
       description: "Category deleted successfully",
     });
+  };
+
+  const updateCategoryColor = async (categoryId: string, newColor: string) => {
+    const { error } = await supabase
+      .from('categories')
+      .update({ color: newColor })
+      .eq('id', parseInt(categoryId))
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Error updating category color:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update category color",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Update local state
+    setCategories(categories.map(cat => 
+      cat.id === categoryId 
+        ? { ...cat, color: newColor }
+        : cat
+    ));
+
+    // Also update any expenses that have cached category colors
+    const { error: expenseError } = await supabase
+      .from('spending')
+      .select('*')
+      .eq('user_id', session.user.id);
+
+    if (!expenseError) {
+      // Reload expenses to reflect the color change
+      await loadExpenses();
+    }
+
+    setEditingCategoryId(null);
+    toast({
+      title: "Success!",
+      description: "Category color updated successfully",
+    });
+  };
+
+  const startEditingCategoryColor = (categoryId: string, currentColor: string) => {
+    setEditingCategoryId(categoryId);
+    setEditingCategoryColor(currentColor);
+  };
+
+  const cancelEditingCategoryColor = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryColor('');
   };
 
   const getAvailableMonths = () => {
@@ -1748,7 +1834,12 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
       </Dialog>
 
       {/* Category Management Dialog */}
-      <Dialog open={isCategoryManageOpen} onOpenChange={setIsCategoryManageOpen}>
+      <Dialog open={isCategoryManageOpen} onOpenChange={(open) => {
+        setIsCategoryManageOpen(open);
+        if (!open) {
+          cancelEditingCategoryColor();
+        }
+      }}>
         <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-purple-50 to-blue-50 border-0 shadow-xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
@@ -1758,42 +1849,108 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
           <div className="space-y-4">
             <div>
               <Label htmlFor="newCategory" className="text-sm font-medium text-gray-700">Add New Category</Label>
-              <div className="flex gap-2 mt-1">
+              <div className="space-y-2 mt-1">
                 <Input
                   id="newCategory"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="Category name"
-                  className="flex-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
+                  className="w-full border-purple-200 focus:border-purple-400 focus:ring-purple-400"
                 />
+                <div>
+                  <Label className="text-xs font-medium text-gray-600 mb-1 block">Choose Color</Label>
+                  <div className="grid grid-cols-10 gap-1">
+                    {COLOR_PALETTE.map((color) => (
+                      <button
+                        key={color.value}
+                        onClick={() => setNewCategoryColor(color.value)}
+                        className={`w-8 h-8 rounded-md border-2 transition-all ${
+                          newCategoryColor === color.value 
+                            ? 'border-purple-600 scale-110 shadow-md' 
+                            : 'border-gray-300 hover:border-purple-400'
+                        }`}
+                        style={{ backgroundColor: color.value }}
+                        title={color.name}
+                      />
+                    ))}
+                  </div>
+                </div>
                 <Button 
                   onClick={addCategory}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                  className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
                 >
-                  Add
+                  Add Category
                 </Button>
               </div>
             </div>
             <div>
               <Label className="text-sm font-medium text-gray-700">Existing Categories</Label>
-              <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2 mt-2 max-h-64 overflow-y-auto">
                 {categories.map((category) => (
-                  <div key={category.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-purple-100">
-                    <div className="flex items-center">
-                      <div 
-                        className="w-3 h-3 rounded-full mr-2 border border-gray-300" 
-                        style={{ backgroundColor: category.color }}
-                      />
-                      <span className="text-sm">{category.name}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteCategory(category.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <div key={category.id} className="p-3 bg-white rounded-lg border border-purple-100">
+                    {editingCategoryId === category.id ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{category.name}</span>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => updateCategoryColor(category.id, editingCategoryColor)}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50 px-2"
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelEditingCategoryColor}
+                              className="text-gray-600 hover:text-gray-700 hover:bg-gray-50 px-2"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Select New Color</Label>
+                          <div className="grid grid-cols-10 gap-1">
+                            {COLOR_PALETTE.map((color) => (
+                              <button
+                                key={color.value}
+                                onClick={() => setEditingCategoryColor(color.value)}
+                                className={`w-6 h-6 rounded border-2 transition-all ${
+                                  editingCategoryColor === color.value 
+                                    ? 'border-purple-600 scale-110 shadow-md' 
+                                    : 'border-gray-300 hover:border-purple-400'
+                                }`}
+                                style={{ backgroundColor: color.value }}
+                                title={color.name}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => startEditingCategoryColor(category.id, category.color)}
+                            className="w-6 h-6 rounded-full mr-3 border-2 border-gray-300 hover:border-purple-400 transition-colors cursor-pointer"
+                            style={{ backgroundColor: category.color }}
+                            title="Click to change color"
+                          />
+                          <span className="text-sm">{category.name}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteCategory(category.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
