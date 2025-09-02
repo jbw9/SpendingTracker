@@ -1,9 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import supabase from '../utils/supabase'
 import LoginPage from './components/login/login'
-import MainPage from './components/main/main' // Make sure this imports MainPage, not Main
+import { PWAInstallPrompt } from './components/PWAInstallPrompt'
+import { PWAUpdatePrompt } from './components/PWAUpdatePrompt'
+import { OfflineIndicator } from './components/OfflineIndicator'
 import './App.css'
+
+// Lazy load the main page component for better performance
+const MainPage = lazy(() => import('./components/main/main'))
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -42,11 +47,31 @@ function App() {
 
   // If no session, show login page
   if (!session) {
-    return <LoginPage onLogin={handleLogin} />
+    return (
+      <>
+        <LoginPage onLogin={handleLogin} />
+        <OfflineIndicator />
+        <PWAInstallPrompt />
+        <PWAUpdatePrompt />
+      </>
+    )
   }
 
   // If session exists, show main app - PASS SUPABASE AS PROP
-  return <MainPage session={session} supabase={supabase} />
+  return (
+    <>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-lg">Loading app...</div>
+        </div>
+      }>
+        <MainPage session={session} supabase={supabase} />
+      </Suspense>
+      <OfflineIndicator />
+      <PWAInstallPrompt />
+      <PWAUpdatePrompt />
+    </>
+  )
 }
 
 export default App
