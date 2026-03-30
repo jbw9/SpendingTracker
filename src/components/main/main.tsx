@@ -927,7 +927,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     }
 
     return months.map((month) => ({
-      month: month.split(" ")[0], // Just the month name
+      month: month.split(" ")[0], // Just the month nameee
       fullMonth: month, // Keep full month for data lookup
       amount: monthlyTotals[month] || 0,
     }));
