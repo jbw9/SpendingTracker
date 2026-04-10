@@ -27,8 +27,6 @@ const LoginDetails: React.FC<LoginDetailsProps> = ({ toggleView, onLogin }) => {
       } else {
         const { session } = data;
         if (session) {
-          // localStorage.setItem("supabaseSession", JSON.stringify(session));
-
           const uuid = session.user.id;
           localStorage.setItem("userId", uuid);
 
@@ -65,80 +63,92 @@ const LoginDetails: React.FC<LoginDetailsProps> = ({ toggleView, onLogin }) => {
   };
 
   return (
-    <div className="flex flex-col max-w-md mx-auto px-4">
-      <span className="text-4xl font-semibold text-center mt-16 text-black">
-        Welcome Back!
-      </span>
-      <form onSubmit={handleLogin} className="mt-8">
-        <div className="space-y-4">
-          <div className="flex flex-col space-y-2">
-            <span className="text-black text-left ml-1 text-bold font-medium">
+    <div className="flex flex-col">
+      {/* Wordmark */}
+      <div className="text-center mb-10">
+        <h1 className="text-4xl font-light mb-1" style={{ fontFamily: 'Georgia, serif', color: '#2C2C2C' }}>
+          spendr
+        </h1>
+        <p className="text-sm" style={{ color: '#9B9694' }}>Track what matters.</p>
+      </div>
+
+      {/* Card */}
+      <div className="rounded-2xl bg-white p-6 border" style={{ borderColor: '#EEEBE6' }}>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>
               Email
-            </span>
-            <div className="bg-white w-full h-12 rounded-lg flex border border-gray-300 rounded-lg">
-              <input
-                className="w-full px-4 bg-white outline-none placeholder-gray-400 text-black"
-                type="text"
-                placeholder="email"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
+            </label>
+            <input
+              className="w-full h-11 px-4 rounded-xl border text-sm outline-none transition-colors focus:border-[#7C9A7E]"
+              style={{ backgroundColor: '#FAF8F4', borderColor: '#EEEBE6', color: '#2C2C2C' }}
+              type="email"
+              placeholder="you@example.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
           </div>
-          <div className="flex flex-col space-y-2">
-            <span className="text-black text-left font-medium text-bold ml-1">
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>
               Password
-            </span>
-            <div className="bg-white w-full h-12 rounded-lg flex border border-gray-300">
+            </label>
+            <div className="relative">
               <input
-                className="w-full px-4 bg-white outline-none placeholder-gray-400 text-black"
+                className="w-full h-11 px-4 pr-12 rounded-xl border text-sm outline-none transition-colors focus:border-[#7C9A7E]"
+                style={{ backgroundColor: '#FAF8F4', borderColor: '#EEEBE6', color: '#2C2C2C' }}
                 type={showPassword ? "text" : "password"}
-                placeholder="password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <div
+              <button
+                type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="px-4 cursor-pointer flex items-center"
+                className="absolute right-4 top-1/2 -translate-y-1/2 transition-opacity hover:opacity-60"
+                style={{ color: '#9B9694' }}
               >
-                {showPassword ? (
-                  <div className="h-5 w-5 text-black">
-                    <EyeIcon />
-                  </div>
-                ) : (
-                  <div className="h-5 w-5 text-black">
-                    <EyeOffIcon />
-                  </div>
-                )}
-              </div>
+                <div className="h-4 w-4">
+                  {showPassword ? <EyeIcon /> : <EyeOffIcon />}
+                </div>
+              </button>
             </div>
           </div>
+
+          {errorMessage && (
+            <p className="text-xs" style={{ color: '#C98D8D' }}>{errorMessage}</p>
+          )}
+
+          <button
+            type="submit"
+            className="w-full h-11 rounded-xl text-white text-sm font-medium transition-opacity hover:opacity-90 mt-2"
+            style={{ backgroundColor: '#7C9A7E' }}
+          >
+            Sign in
+          </button>
+        </form>
+
+        <div className="flex justify-end mt-3">
+          <button
+            onClick={handleResetPassword}
+            className="text-xs transition-opacity hover:opacity-60"
+            style={{ color: '#9B9694' }}
+          >
+            Forgot password?
+          </button>
         </div>
-        {errorMessage && (
-          <div className="mt-4 text-red-600">{errorMessage}</div>
-        )}
+      </div>
+
+      <p className="text-center text-sm mt-6" style={{ color: '#9B9694' }}>
+        New here?{' '}
         <button
-          type="submit"
-          className="w-full h-12  bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg text-white font-bold mt-6 mb-1 hover:scale-[101%] transition-all"
-        >
-          Sign in
-        </button>
-        <button
-          onClick={handleResetPassword}
-          className="text-black text-sm hover:underline cursor-pointer bg-transparent border-none p-0 float-right mr-1"
-        >
-          Forgot Password?
-        </button>
-      </form>
-      <div className="flex justify-center my-6">
-        <span className="text-black">Don't have an account?</span>
-        <button
-          className="ml-2 hover:underline text-black"
+          className="transition-opacity hover:opacity-60 font-medium"
+          style={{ color: '#2C2C2C' }}
           onClick={toggleView}
         >
-          Create an Account
+          Create an account
         </button>
-      </div>
+      </p>
     </div>
   );
 };

@@ -1220,376 +1220,453 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-lg">Loading your spending data...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAF8F4' }}>
+        <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: '#7C9A7E' }} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white p-4 pb-20">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header with Currency Selector */}
-        <div className="flex justify-between items-center p-4 bg-white rounded-lg shadow-md">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Spending Tracker</h1>
-          </div>
-          <div className="flex items-center space-x-3">
-            <Label className="text-sm font-medium text-gray-700">Currency:</Label>
-            <Select value={userCurrency} onValueChange={(value: Currency) => handleCurrencyChange(value)}>
-              <SelectTrigger className="w-32">
-                <Settings className="h-4 w-4 mr-1" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {getAllCurrencies().map((currency) => (
-                  <SelectItem key={currency.code} value={currency.code}>
-                    <div className="flex items-center space-x-2">
-                      <span>{currency.symbol}</span>
-                      <span>{currency.code}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+    <div className="min-h-screen pb-28" style={{ backgroundColor: '#FAF8F4' }}>
+      <div className="max-w-xl mx-auto px-4 pt-6 space-y-4">
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-0 shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm">{isCurrentMonth() ? "This Month's Spending" : `${getMonthName(selectedMonth)}'s Spending`}</p>
+        {/* Header */}
+        <div className="flex justify-between items-center py-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const months = getAvailableMonths();
+                const currentIndex = months.indexOf(selectedMonth);
+                if (currentIndex > 0) setSelectedMonth(months[currentIndex - 1]);
+              }}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white"
+              style={{ color: '#9B9694' }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <h2 className="text-sm font-medium" style={{ color: '#2C2C2C' }}>{selectedMonth}</h2>
+            <button
+              onClick={() => {
+                const months = getAvailableMonths();
+                const currentIndex = months.indexOf(selectedMonth);
+                if (currentIndex < months.length - 1) setSelectedMonth(months[currentIndex + 1]);
+              }}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white"
+              style={{ color: '#9B9694' }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <Select value={userCurrency} onValueChange={(value: Currency) => handleCurrencyChange(value)}>
+            <SelectTrigger
+              className="w-20 h-8 text-xs rounded-full border"
+              style={{ borderColor: '#EEEBE6', color: '#2C2C2C', backgroundColor: 'white' }}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {getAllCurrencies().map((currency) => (
+                <SelectItem key={currency.code} value={currency.code}>
                   <div className="flex items-center space-x-2">
-                    <p className="text-2xl font-bold">
-                      {formatCurrency(selectedMonthSpent, userCurrency)} / {formatCurrency(budgetAmount, userCurrency)}
-                    </p>
-                    <Button variant="ghost" size="sm" onClick={openBudgetEdit} className="text-blue-200 hover:text-white hover:bg-blue-500/20 p-1 h-auto">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <span>{currency.symbol}</span>
+                    <span>{currency.code}</span>
                   </div>
-                </div>
-                <TrendingUp className="h-8 w-8 text-blue-200" />
-              </div>
-              <div className="mt-4">
-                <div className="relative h-2 bg-blue-400 rounded-full overflow-hidden">
-                  <div
-                    className="h-full transition-all duration-300 ease-in-out"
-                    style={{
-                      width: `${Math.min(budgetProgress, 100)}%`,
-                      backgroundColor: getProgressBarColor(),
-                    }}
-                  />
-                </div>
-                <p className="text-blue-100 text-xs mt-1">{isNaN(budgetProgress) ? "100% remaining" : budgetProgress > 100 ? "Over budget" : `${(100 - budgetProgress).toFixed(0)}% remaining`}</p>
-
-                {/* Currency breakdown - only show if multiple currencies */}
-                {currencyBreakdown.length > 1 && (
-                  <div className="mt-3 pt-3 border-t border-blue-400/30">
-                    <p className="text-blue-100 text-xs mb-2 font-medium">Currency Breakdown:</p>
-                    <div className="space-y-1">
-                      {currencyBreakdown.map((item) => (
-                        <div key={item.currency} className="flex justify-between items-center text-xs">
-                          <span className="text-blue-200">
-                            {getCurrencySymbol(item.currency)} {formatCurrency(item.originalAmount, item.currency).replace(/^[^0-9]*/, "")}
-                          </span>
-                          <span className="text-blue-100">→ {formatCurrency(item.convertedAmount, userCurrency)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white border-0 shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-purple-100 text-sm font-medium">{isCurrentMonth() ? "Category Breakdown" : `${getMonthName(selectedMonth)}'s Categories`}</p>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <p className="text-lg font-semibold text-white">{displayedCategory?.name || "No data"}</p>
-                    {displayedCategory && selectedMonthSpent > 0 && <span className="text-sm text-purple-200 bg-purple-400/30 px-2 py-1 rounded">{Math.round((displayedCategory.value / selectedMonthSpent) * 100)}%</span>}
-                  </div>
-                </div>
-                <PieChartIcon className="h-5 w-5 text-purple-200" />
-              </div>
-              <div className="h-48 relative">
-                {categoryData.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-purple-200 text-sm">No spending data for {getMonthName(selectedMonth)}</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none" onClick={handlePieChartClick}>
-                        {categoryData.map((entry, index) => {
-                          const isSelected = entry.name === (selectedCategory || categoryData[0]?.name);
-                          return (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={entry.color}
-                              stroke="#8B5CF6"
-                              strokeWidth={1}
-                              style={{
-                                filter: isSelected ? "drop-shadow(0 4px 8px rgba(0,0,0,0.3))" : "none",
-                                transform: isSelected ? "scale(1.05)" : "scale(1)",
-                                transformOrigin: "center",
-                                transition: "all 0.2s ease-in-out",
-                              }}
-                            />
-                          );
-                        })}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-                {/* Center content - show selected category amount */}
-                {categoryData.length > 0 && displayedCategory && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <p className="text-2xl font-bold text-white">{formatCurrency(displayedCategory.value, userCurrency)}</p>
-                    <p className="text-xs text-purple-200">{displayedCategory.name}</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Enhanced Expenses Section with Search and Filters */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <div className="flex flex-col space-y-4">
-              <CardTitle>{isCurrentMonth() ? "All Expenses" : `${getMonthName(selectedMonth)}'s Expenses`}</CardTitle>
-
-              {/* Search and Filter Controls */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                {/* Search Bar */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input placeholder="Search by name, category, amount, or note..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 pr-10" />
-                  {searchTerm && (
-                    <Button variant="ghost" size="sm" onClick={() => setSearchTerm("")} className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0">
-                      <X className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-
-                {/* Category Filter */}
-                <Select value={filterCategory} onValueChange={setFilterCategory}>
-                  <SelectTrigger className="w-full sm:w-48">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Filter by category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.name}>
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 rounded-full mr-2 border border-gray-300" style={{ backgroundColor: category.color }} />
-                          {category.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Sort Options */}
-                <div className="flex gap-2">
-                  <Select value={sortBy} onValueChange={(value: "date" | "amount" | "name" | "category") => setSortBy(value)}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="date">Date</SelectItem>
-                      <SelectItem value="amount">Amount</SelectItem>
-                      <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="category">Category</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Button variant="outline" size="sm" onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")} className="px-3">
-                    {sortOrder === "asc" ? "↑" : "↓"}
-                  </Button>
-                </div>
-
-                {/* Clear Filters Button */}
-                {(searchTerm || filterCategory !== "all" || sortBy !== "date" || sortOrder !== "desc") && (
-                  <Button variant="outline" size="sm" onClick={clearFilters} className="whitespace-nowrap">
-                    Clear Filters
-                  </Button>
-                )}
+        {/* Budget Hero Card */}
+        <div className="rounded-2xl p-5 bg-white border" style={{ borderColor: '#EEEBE6' }}>
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-widest font-medium mb-1" style={{ color: '#9B9694' }}>
+                {isCurrentMonth() ? 'This Month' : getMonthName(selectedMonth)}
+              </p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-4xl font-light" style={{ fontFamily: 'Georgia, serif', color: '#2C2C2C' }}>
+                  {formatCurrency(selectedMonthSpent, userCurrency)}
+                </p>
+                <button onClick={openBudgetEdit} className="transition-opacity hover:opacity-50 mb-1">
+                  <Edit className="h-3.5 w-3.5" style={{ color: '#9B9694' }} />
+                </button>
               </div>
-
-              {/* Results Summary */}
-              <div className="text-sm text-gray-600">
-                Showing {filteredExpenses.length} of {expenses.filter((e) => e.month === selectedMonth).length} expenses
-                {searchTerm && ` matching "${searchTerm}"`}
-                {filterCategory !== "all" && ` in ${filterCategory}`}
+              <p className="text-sm mt-0.5" style={{ color: '#9B9694' }}>
+                of {formatCurrency(budgetAmount, userCurrency)} budget
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-light" style={{ fontFamily: 'Georgia, serif', color: budgetProgress > 100 ? '#C98D8D' : '#7C9A7E' }}>
+                {isNaN(budgetProgress) ? '100' : Math.max(0, 100 - budgetProgress).toFixed(0)}%
+              </p>
+              <p className="text-xs" style={{ color: '#9B9694' }}>remaining</p>
+            </div>
+          </div>
+          <div className="h-1 rounded-full overflow-hidden" style={{ backgroundColor: '#EEEBE6' }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${Math.min(budgetProgress, 100)}%`,
+                backgroundColor: budgetProgress > 100 ? '#C98D8D' : budgetProgress > 75 ? '#E8B07A' : '#7C9A7E',
+              }}
+            />
+          </div>
+          {budgetProgress > 100 && (
+            <p className="text-xs mt-2" style={{ color: '#C98D8D' }}>
+              Over budget by {formatCurrency(selectedMonthSpent - budgetAmount, userCurrency)}
+            </p>
+          )}
+          {currencyBreakdown.length > 1 && (
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: '#EEEBE6' }}>
+              <p className="text-xs font-medium mb-1.5" style={{ color: '#9B9694' }}>Currency Breakdown</p>
+              <div className="space-y-1">
+                {currencyBreakdown.map((item) => (
+                  <div key={item.currency} className="flex justify-between items-center text-xs" style={{ color: '#9B9694' }}>
+                    <span>{getCurrencySymbol(item.currency)} {formatCurrency(item.originalAmount, item.currency).replace(/^[^0-9]*/, "")}</span>
+                    <span>→ {formatCurrency(item.convertedAmount, userCurrency)}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            {filteredExpenses.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Wallet className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>
-                  {expenses.filter((e) => e.month === selectedMonth).length === 0
-                    ? isCurrentMonth()
-                      ? "No expenses yet. Start tracking by adding your first expense!"
-                      : `No expenses recorded for ${getMonthName(selectedMonth)}.`
-                    : "No expenses match your current filters."}
-                </p>
-                {(searchTerm || filterCategory !== "all") && (
-                  <Button variant="outline" size="sm" onClick={clearFilters} className="mt-2">
-                    Clear Filters
-                  </Button>
+          )}
+        </div>
+
+        {/* Category Donut Chart */}
+        <div className="rounded-2xl p-5 bg-white border" style={{ borderColor: '#EEEBE6' }}>
+          <p className="text-xs uppercase tracking-widest font-medium mb-4" style={{ color: '#9B9694' }}>By Category</p>
+          {categoryData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <PieChartIcon className="h-8 w-8 mb-2" style={{ color: '#EEEBE6' }} />
+              <p className="text-sm" style={{ color: '#9B9694' }}>No spending for {getMonthName(selectedMonth)}</p>
+            </div>
+          ) : (
+            <>
+              <div className="h-44 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                      stroke="none"
+                      onClick={handlePieChartClick}
+                    >
+                      {categoryData.map((entry, index) => {
+                        const isSelected = entry.name === (selectedCategory || categoryData[0]?.name);
+                        return (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.color}
+                            opacity={isSelected ? 1 : 0.45}
+                            style={{ cursor: 'pointer', transition: 'opacity 0.2s ease' }}
+                          />
+                        );
+                      })}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                {displayedCategory && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <p className="text-xl font-light" style={{ fontFamily: 'Georgia, serif', color: '#2C2C2C' }}>
+                      {formatCurrency(displayedCategory.value, userCurrency)}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#9B9694' }}>{displayedCategory.name}</p>
+                  </div>
                 )}
               </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {filteredExpenses.map((expense) => {
-                  const category = categories.find((cat) => cat.name === expense.category);
+              <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scrollbar-hide">
+                {categoryData.map((cat) => {
+                  const isSelected = cat.name === (selectedCategory || categoryData[0]?.name);
                   return (
-                    <div key={expense.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors" onClick={() => handleEditExpense(expense)}>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: category?.color || "#FFFFFF" }} />
-                        <div>
-                          <p className="font-medium">{expense.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {expense.category}
-                            {expense.note && <span className="ml-2 text-gray-400">({expense.note})</span>}
-                          </p>
-                          <p className="text-xs text-gray-400">{new Date(expense.date).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                      <p className="text-lg font-semibold">{formatCurrency(expense.amount, expense.currency)}</p>
-                    </div>
+                    <button
+                      key={cat.name}
+                      onClick={() => setSelectedCategory(cat.name)}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                      style={{
+                        backgroundColor: isSelected ? '#2C2C2C' : '#FAF8F4',
+                        color: isSelected ? '#FFFFFF' : '#2C2C2C',
+                        border: `1px solid ${isSelected ? '#2C2C2C' : '#EEEBE6'}`,
+                      }}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                      {cat.name}
+                    </button>
                   );
                 })}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </>
+          )}
+        </div>
 
-        {/* Monthly Spending Chart - Now serves as Month Selector */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-center flex-1">Monthly Spending Overview</CardTitle>
-              <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm" onClick={() => setMonthOffset(monthOffset - 1)} className="h-8 w-8 p-0">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setMonthOffset(monthOffset + 1)} className="h-8 w-8 p-0">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+        {/* Monthly Trend */}
+        <div className="rounded-2xl p-5 bg-white border" style={{ borderColor: '#EEEBE6' }}>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs uppercase tracking-widest font-medium" style={{ color: '#9B9694' }}>Monthly Trend</p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setMonthOffset(monthOffset - 1)}
+                className="w-6 h-6 rounded-full flex items-center justify-center transition-colors hover:bg-[#FAF8F4]"
+                style={{ color: '#9B9694' }}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setMonthOffset(monthOffset + 1)}
+                className="w-6 h-6 rounded-full flex items-center justify-center transition-colors hover:bg-[#FAF8F4]"
+                style={{ color: '#9B9694' }}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={convertedMonthlyData.length > 0 ? convertedMonthlyData : getMonthlyData()} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => formatCurrency(value, userCurrency)} />
-                <Tooltip
-                  formatter={(value) => [formatCurrency(Number(value), userCurrency), "Amount"]}
-                  labelFormatter={(label, payload) => {
-                    const data = payload?.[0]?.payload;
-                    return data?.fullMonth || label;
-                  }}
-                />
-                <Bar
-                  dataKey="amount"
-                  radius={[4, 4, 0, 0]}
-                  style={{ cursor: "pointer" }}
-                  onClick={(data) => {
-                    if (data && data.fullMonth) {
-                      setSelectedMonth(data.fullMonth);
-                    }
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart
+              data={convertedMonthlyData.length > 0 ? convertedMonthlyData : getMonthlyData()}
+              margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
+            >
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9B9694' }} />
+              <YAxis hide />
+              <Tooltip
+                cursor={{ fill: '#FAF8F4' }}
+                contentStyle={{ border: '1px solid #EEEBE6', borderRadius: '12px', fontSize: '12px', color: '#2C2C2C', boxShadow: 'none' }}
+                formatter={(value) => [formatCurrency(Number(value), userCurrency), 'Spent']}
+                labelFormatter={(label, payload) => {
+                  const data = payload?.[0]?.payload;
+                  return data?.fullMonth || label;
+                }}
+              />
+              <Bar
+                dataKey="amount"
+                radius={[6, 6, 3, 3]}
+                style={{ cursor: 'pointer' }}
+                onClick={(data) => {
+                  if (data && data.fullMonth) {
+                    setSelectedMonth(data.fullMonth);
+                  }
+                }}
+              >
+                {(convertedMonthlyData.length > 0 ? convertedMonthlyData : getMonthlyData()).map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.fullMonth === selectedMonth ? '#7C9A7E' : '#EEEBE6'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="text-xs text-center mt-2" style={{ color: '#9B9694' }}>Tap a bar to switch months</p>
+        </div>
+
+        {/* Expense List */}
+        <div className="rounded-2xl bg-white border overflow-hidden" style={{ borderColor: '#EEEBE6' }}>
+          <div className="p-5 pb-3">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs uppercase tracking-widest font-medium" style={{ color: '#9B9694' }}>Transactions</p>
+              <span className="text-xs" style={{ color: '#9B9694' }}>
+                {filteredExpenses.length} of {expenses.filter((e) => e.month === selectedMonth).length}
+              </span>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: '#9B9694' }} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search..."
+                className="w-full pl-8 pr-8 py-2 text-sm rounded-xl outline-none border transition-colors"
+                style={{ backgroundColor: '#FAF8F4', borderColor: '#EEEBE6', color: '#2C2C2C' }}
+              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="h-3.5 w-3.5" style={{ color: '#9B9694' }} />
+                </button>
+              )}
+            </div>
+            <div className="flex gap-1.5 mt-2.5 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                onClick={() => setFilterCategory('all')}
+                className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: filterCategory === 'all' ? '#2C2C2C' : '#FAF8F4',
+                  color: filterCategory === 'all' ? '#FFFFFF' : '#9B9694',
+                  border: `1px solid ${filterCategory === 'all' ? '#2C2C2C' : '#EEEBE6'}`,
+                }}
+              >
+                All
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setFilterCategory(filterCategory === cat.name ? 'all' : cat.name)}
+                  className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: filterCategory === cat.name ? '#2C2C2C' : '#FAF8F4',
+                    color: filterCategory === cat.name ? '#FFFFFF' : '#9B9694',
+                    border: `1px solid ${filterCategory === cat.name ? '#2C2C2C' : '#EEEBE6'}`,
                   }}
                 >
-                  {(convertedMonthlyData.length > 0 ? convertedMonthlyData : getMonthlyData()).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fullMonth === selectedMonth ? "#6366F1" : "#8B5CF6"} stroke={entry.fullMonth === selectedMonth ? "#4338CA" : "none"} strokeWidth={entry.fullMonth === selectedMonth ? 2 : 0} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <p className="text-sm text-gray-500 text-center mt-2">Click on any bar to select that month and view its data above</p>
-          </CardContent>
-        </Card>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        {/* Sign Out Button */}
-        <div className="flex justify-center mt-6">
-          <Button onClick={() => supabase.auth.signOut()} className="bg-red-400 text-white">
-            Sign Out
-          </Button>
+          {filteredExpenses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 px-5">
+              <Wallet className="h-7 w-7 mb-2" style={{ color: '#EEEBE6' }} />
+              <p className="text-sm text-center" style={{ color: '#9B9694' }}>
+                {expenses.filter((e) => e.month === selectedMonth).length === 0
+                  ? isCurrentMonth()
+                    ? 'No expenses yet. Tap + to add one.'
+                    : `No expenses for ${getMonthName(selectedMonth)}.`
+                  : 'No matches for your filters.'}
+              </p>
+              {(searchTerm || filterCategory !== 'all') && (
+                <button onClick={clearFilters} className="mt-2 text-xs underline" style={{ color: '#7C9A7E' }}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              {filteredExpenses.map((expense, idx) => {
+                const category = categories.find((cat) => cat.name === expense.category);
+                return (
+                  <button
+                    key={expense.id}
+                    className="w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors hover:bg-[#FAF8F4] active:bg-[#FAF8F4]"
+                    style={{ borderTop: idx === 0 ? 'none' : `1px solid #EEEBE6` }}
+                    onClick={() => handleEditExpense(expense)}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: category?.color || '#EEEBE6' }} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: '#2C2C2C' }}>{expense.name}</p>
+                        <p className="text-xs truncate" style={{ color: '#9B9694' }}>
+                          {expense.category}
+                          {expense.note && <span className="ml-1">· {expense.note}</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right ml-3 flex-shrink-0">
+                      <p className="text-sm font-medium" style={{ fontFamily: 'Georgia, serif', color: '#2C2C2C' }}>
+                        {formatCurrency(expense.amount, expense.currency)}
+                      </p>
+                      <p className="text-xs" style={{ color: '#9B9694' }}>
+                        {new Date(expense.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Sort controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs" style={{ color: '#9B9694' }}>Sort</span>
+          {(['date', 'amount', 'name', 'category'] as const).map((option) => (
+            <button
+              key={option}
+              onClick={() => {
+                if (sortBy === option) {
+                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                } else {
+                  setSortBy(option);
+                }
+              }}
+              className="text-xs px-2.5 py-1 rounded-lg transition-all capitalize"
+              style={{
+                backgroundColor: sortBy === option ? '#2C2C2C' : 'transparent',
+                color: sortBy === option ? '#FFFFFF' : '#9B9694',
+              }}
+            >
+              {option}{sortBy === option ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}
+            </button>
+          ))}
+        </div>
+
+        {/* Sign out */}
+        <div className="flex justify-center pb-6">
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="text-xs transition-opacity hover:opacity-50"
+            style={{ color: '#9B9694' }}
+          >
+            Sign out
+          </button>
         </div>
       </div>
 
       {/* Floating Add Button */}
-      <Button
+      <button
         onClick={(e) => {
-          console.log("Floating button clicked!"); // Debug log
           e.stopPropagation();
           setIsAddExpenseOpen(true);
         }}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 z-[9999]"
-        size="icon"
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 z-50"
+        style={{ backgroundColor: '#7C9A7E' }}
       >
-        <Plus className="h-6 w-6" />
-      </Button>
+        <Plus className="h-6 w-6 text-white" />
+      </button>
 
+      {/* Add/Edit Expense Dialog */}
       <Dialog open={isAddExpenseOpen} onOpenChange={handleCloseDialog}>
-        <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-purple-50 to-blue-50 shadow-xl">
+        <DialogContent className="w-[95vw] max-w-md bg-white rounded-2xl border-0 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">{editingExpense ? "Edit Expense" : "Add New Expense"}</DialogTitle>
+            <DialogTitle className="text-base font-medium" style={{ color: '#2C2C2C' }}>
+              {editingExpense ? 'Edit Expense' : 'New Expense'}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="month" className="text-sm font-medium text-gray-700">
-                Month
-              </Label>
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Month</Label>
               <Select value={newExpense.month} onValueChange={(value) => setNewExpense({ ...newExpense, month: value })}>
-                <SelectTrigger className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400">
+                <SelectTrigger className="mt-1.5 border rounded-xl h-11" style={{ borderColor: '#EEEBE6' }}>
                   <SelectValue placeholder="Select month" />
                 </SelectTrigger>
                 <SelectContent className="bg-white max-h-48 overflow-y-auto">
                   {getAvailableMonths().map((month) => (
-                    <SelectItem key={month} value={month}>
-                      {month}
-                    </SelectItem>
+                    <SelectItem key={month} value={month}>{month}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                Transaction Name
-              </Label>
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Name</Label>
               <Input
                 id="name"
                 value={newExpense.name}
                 onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
-                placeholder="What did you buy?"
-                className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
+                placeholder="What did you spend on?"
+                className="mt-1.5 border rounded-xl h-11"
+                style={{ borderColor: '#EEEBE6' }}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="amount" className="text-sm font-medium text-gray-700">
-                  Amount
-                </Label>
-                <Input id="amount" type="text" value={newExpense.amount} onChange={(e) => handleExpenseAmountChange(e.target.value)} placeholder="0.00" className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400" />
+                <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Amount</Label>
+                <Input
+                  id="amount"
+                  type="text"
+                  value={newExpense.amount}
+                  onChange={(e) => handleExpenseAmountChange(e.target.value)}
+                  placeholder="0.00"
+                  className="mt-1.5 border rounded-xl h-11 text-lg"
+                  style={{ borderColor: '#EEEBE6', fontFamily: 'Georgia, serif' }}
+                />
               </div>
               <div>
-                <Label htmlFor="currency" className="text-sm font-medium text-gray-700">
-                  Currency
-                </Label>
+                <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Currency</Label>
                 <Select value={newExpense.currency} onValueChange={(value: Currency) => setNewExpense({ ...newExpense, currency: value })}>
-                  <SelectTrigger className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400">
+                  <SelectTrigger className="mt-1.5 border rounded-xl h-11" style={{ borderColor: '#EEEBE6' }}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1598,7 +1675,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                         <div className="flex items-center space-x-2">
                           <span>{currency.symbol}</span>
                           <span>{currency.code}</span>
-                          <span className="text-xs text-gray-500">({currency.name})</span>
+                          <span className="text-xs" style={{ color: '#9B9694' }}>({currency.name})</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1607,70 +1684,70 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
               </div>
             </div>
             <div>
-              <Label htmlFor="category" className="text-sm font-medium text-gray-700">
-                Category
-              </Label>
-              <div className="flex gap-2 mt-1">
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Category</Label>
+              <div className="flex gap-2 mt-1.5">
                 <Select value={newExpense.category} onValueChange={(value) => setNewExpense({ ...newExpense, category: value })}>
-                  <SelectTrigger className="flex-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400">
+                  <SelectTrigger className="flex-1 border rounded-xl h-11" style={{ borderColor: '#EEEBE6' }}>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.name}>
                         <div className="flex items-center">
-                          <div className="w-3 h-3 rounded-full mr-2 border border-gray-300" style={{ backgroundColor: category.color }} />
+                          <div className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: category.color }} />
                           {category.name}
                         </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="icon" onClick={() => setIsCategoryManageOpen(true)} className="border-purple-200 hover:bg-purple-50">
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <button
+                  onClick={() => setIsCategoryManageOpen(true)}
+                  className="w-11 h-11 rounded-xl border flex items-center justify-center transition-colors hover:bg-[#FAF8F4]"
+                  style={{ borderColor: '#EEEBE6' }}
+                >
+                  <Plus className="h-4 w-4" style={{ color: '#9B9694' }} />
+                </button>
               </div>
             </div>
             <div>
-              <Label htmlFor="note" className="text-sm font-medium text-gray-700">
-                Note (optional)
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>
+                Note <span style={{ color: '#EEEBE6', textTransform: 'none', letterSpacing: 'normal' }}>(optional)</span>
               </Label>
               <Textarea
                 id="note"
                 value={newExpense.note}
                 onChange={(e) => setNewExpense({ ...newExpense, note: e.target.value })}
-                placeholder="Additional details..."
-                className="mt-1 border-purple-200 focus:border-purple-400 focus:ring-purple-400"
+                placeholder="Any extra details..."
+                className="mt-1.5 border rounded-xl resize-none"
+                style={{ borderColor: '#EEEBE6' }}
                 rows={2}
               />
             </div>
-            <div className="flex gap-2">
-              <Button
+            <div className="space-y-2 pt-1">
+              <button
                 onClick={(e) => {
                   e.preventDefault();
-                  console.log("Button clicked!"); // Debug log
                   addExpense();
                 }}
                 type="button"
-                className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+                className="w-full h-11 rounded-xl text-white text-sm font-medium transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#7C9A7E' }}
               >
-                {editingExpense ? "Update Expense" : "Add Expense"}
-              </Button>
+                {editingExpense ? 'Update Expense' : 'Add Expense'}
+              </button>
               {editingExpense && (
-                <Button
+                <button
                   onClick={(e) => {
                     e.preventDefault();
-                    if (editingExpense) {
-                      deleteExpense(editingExpense.id);
-                    }
+                    if (editingExpense) deleteExpense(editingExpense.id);
                   }}
                   type="button"
-                  variant="outline"
-                  size="icon"
-                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                  className="w-full text-sm py-2 transition-opacity hover:opacity-60"
+                  style={{ color: '#C98D8D' }}
                 >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                  Delete expense
+                </button>
               )}
             </div>
           </div>
@@ -1682,88 +1759,110 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
         open={isCategoryManageOpen}
         onOpenChange={(open) => {
           setIsCategoryManageOpen(open);
-          if (!open) {
-            cancelEditingCategoryColor();
-          }
+          if (!open) cancelEditingCategoryColor();
         }}
       >
-        <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-purple-50 to-blue-50 border-0 shadow-xl">
+        <DialogContent className="w-[95vw] max-w-md bg-white rounded-2xl border-0 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Manage Categories</DialogTitle>
+            <DialogTitle className="text-base font-medium" style={{ color: '#2C2C2C' }}>
+              Manage Categories
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newCategory" className="text-sm font-medium text-gray-700">
-                Add New Category
-              </Label>
-              <div className="space-y-2 mt-1">
-                <Input id="newCategory" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Category name" className="w-full border-purple-200 focus:border-purple-400 focus:ring-purple-400" />
-                <div>
-                  <Label className="text-xs font-medium text-gray-600 mb-1 block">Choose Color</Label>
-                  <div className="grid grid-cols-10 gap-1">
-                    {COLOR_PALETTE.map((color) => (
-                      <button
-                        key={color.value}
-                        onClick={() => setNewCategoryColor(color.value)}
-                        className={`w-8 h-8 rounded-md border-2 transition-all ${newCategoryColor === color.value ? "border-purple-600 scale-110 shadow-md" : "border-gray-300 hover:border-purple-400"}`}
-                        style={{ backgroundColor: color.value }}
-                        title={color.name}
-                      />
-                    ))}
-                  </div>
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>New Category</Label>
+              <div className="space-y-2 mt-1.5">
+                <Input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="Category name"
+                  className="border rounded-xl h-11"
+                  style={{ borderColor: '#EEEBE6' }}
+                />
+                <div className="grid grid-cols-10 gap-1">
+                  {COLOR_PALETTE.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => setNewCategoryColor(color.value)}
+                      className="w-8 h-8 rounded-lg transition-all"
+                      style={{
+                        backgroundColor: color.value,
+                        outline: newCategoryColor === color.value ? `2px solid #2C2C2C` : '2px solid transparent',
+                        outlineOffset: '2px',
+                        transform: newCategoryColor === color.value ? 'scale(1.1)' : 'scale(1)',
+                      }}
+                      title={color.name}
+                    />
+                  ))}
                 </div>
-                <Button onClick={addCategory} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white">
+                <button
+                  onClick={addCategory}
+                  className="w-full h-10 rounded-xl text-white text-sm font-medium transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: '#7C9A7E' }}
+                >
                   Add Category
-                </Button>
+                </button>
               </div>
             </div>
             <div>
-              <Label className="text-sm font-medium text-gray-700">Existing Categories</Label>
-              <div className="space-y-2 mt-2 max-h-64 overflow-y-auto">
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Existing</Label>
+              <div className="space-y-2 mt-2 max-h-56 overflow-y-auto">
                 {categories.map((category) => (
-                  <div key={category.id} className="p-3 bg-white rounded-lg border border-purple-100">
+                  <div key={category.id} className="px-4 py-3 rounded-xl border" style={{ borderColor: '#EEEBE6' }}>
                     {editingCategoryId === category.id ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">{category.name}</span>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => updateCategoryColor(category.id, editingCategoryColor)} className="text-green-600 hover:text-green-700 hover:bg-green-50 px-2">
+                          <span className="text-sm font-medium" style={{ color: '#2C2C2C' }}>{category.name}</span>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => updateCategoryColor(category.id, editingCategoryColor)}
+                              className="text-xs font-medium transition-opacity hover:opacity-70"
+                              style={{ color: '#7C9A7E' }}
+                            >
                               Save
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={cancelEditingCategoryColor} className="text-gray-600 hover:text-gray-700 hover:bg-gray-50 px-2">
+                            </button>
+                            <button
+                              onClick={cancelEditingCategoryColor}
+                              className="text-xs transition-opacity hover:opacity-70"
+                              style={{ color: '#9B9694' }}
+                            >
                               Cancel
-                            </Button>
+                            </button>
                           </div>
                         </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Select New Color</Label>
-                          <div className="grid grid-cols-10 gap-1">
-                            {COLOR_PALETTE.map((color) => (
-                              <button
-                                key={color.value}
-                                onClick={() => setEditingCategoryColor(color.value)}
-                                className={`w-6 h-6 rounded border-2 transition-all ${editingCategoryColor === color.value ? "border-purple-600 scale-110 shadow-md" : "border-gray-300 hover:border-purple-400"}`}
-                                style={{ backgroundColor: color.value }}
-                                title={color.name}
-                              />
-                            ))}
-                          </div>
+                        <div className="grid grid-cols-10 gap-1">
+                          {COLOR_PALETTE.map((color) => (
+                            <button
+                              key={color.value}
+                              onClick={() => setEditingCategoryColor(color.value)}
+                              className="w-6 h-6 rounded transition-all"
+                              style={{
+                                backgroundColor: color.value,
+                                outline: editingCategoryColor === color.value ? `2px solid #2C2C2C` : '2px solid transparent',
+                                outlineOffset: '2px',
+                              }}
+                              title={color.name}
+                            />
+                          ))}
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-3">
                           <button
                             onClick={() => startEditingCategoryColor(category.id, category.color)}
-                            className="w-6 h-6 rounded-full mr-3 border-2 border-gray-300 hover:border-purple-400 transition-colors cursor-pointer"
-                            style={{ backgroundColor: category.color }}
+                            className="w-5 h-5 rounded-full transition-transform hover:scale-110"
+                            style={{ backgroundColor: category.color, outline: `2px solid #EEEBE6`, outlineOffset: '2px' }}
                             title="Click to change color"
                           />
-                          <span className="text-sm">{category.name}</span>
+                          <span className="text-sm" style={{ color: '#2C2C2C' }}>{category.name}</span>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => deleteCategory(category.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <button
+                          onClick={() => deleteCategory(category.id)}
+                          className="transition-opacity hover:opacity-60"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" style={{ color: '#C98D8D' }} />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1776,27 +1875,43 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
       {/* Budget Edit Dialog */}
       <Dialog open={isBudgetEditOpen} onOpenChange={setIsBudgetEditOpen}>
-        <DialogContent className="w-[95vw] max-w-md bg-gradient-to-br from-blue-50 to-indigo-50 border-0 shadow-xl">
+        <DialogContent className="w-[95vw] max-w-md bg-white rounded-2xl border-0 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Set Budget for {getMonthName(selectedMonth)}</DialogTitle>
+            <DialogTitle className="text-base font-medium" style={{ color: '#2C2C2C' }}>
+              Budget for {getMonthName(selectedMonth)}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="budget" className="text-sm font-medium text-gray-700">
-                Monthly Budget
-              </Label>
-              <Input id="budget" type="text" value={editingBudget} onChange={(e) => handleBudgetInputChange(e.target.value)} placeholder="Enter budget amount" className="mt-1 border-blue-200 focus:border-blue-400 focus:ring-blue-400" />
-              <p className="text-xs text-gray-500 mt-1">
-                Set your spending limit for {selectedMonth} in {getCurrencySymbol(userCurrency)} ({userCurrency})
+              <Label className="text-xs font-medium uppercase tracking-widest" style={{ color: '#9B9694' }}>Monthly Budget</Label>
+              <Input
+                id="budget"
+                type="text"
+                value={editingBudget}
+                onChange={(e) => handleBudgetInputChange(e.target.value)}
+                placeholder="0.00"
+                className="mt-1.5 border rounded-xl h-11 text-lg"
+                style={{ borderColor: '#EEEBE6', fontFamily: 'Georgia, serif' }}
+              />
+              <p className="text-xs mt-1.5" style={{ color: '#9B9694' }}>
+                Limit for {selectedMonth} in {getCurrencySymbol(userCurrency)} ({userCurrency})
               </p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={saveBudget} className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
+              <button
+                onClick={saveBudget}
+                className="flex-1 h-11 rounded-xl text-white text-sm font-medium transition-opacity hover:opacity-90"
+                style={{ backgroundColor: '#7C9A7E' }}
+              >
                 Save Budget
-              </Button>
-              <Button onClick={() => setIsBudgetEditOpen(false)} variant="outline" className="border-blue-300 text-blue-600 hover:bg-blue-50">
+              </button>
+              <button
+                onClick={() => setIsBudgetEditOpen(false)}
+                className="flex-1 h-11 rounded-xl text-sm font-medium border transition-colors hover:bg-[#FAF8F4]"
+                style={{ borderColor: '#EEEBE6', color: '#2C2C2C' }}
+              >
                 Cancel
-              </Button>
+              </button>
             </div>
           </div>
         </DialogContent>

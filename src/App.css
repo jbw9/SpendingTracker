@@ -2,31 +2,31 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    /* Warm cream background */
+    --background: 38 33% 97%;
+    --foreground: 0 3% 17%;
+    /* White surface for cards */
+    --card: 0 0% 100%;
+    --card-foreground: 0 3% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-  }
-
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --popover: 0 0% 14.9%;
-    --popover-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --popover-foreground: 0 3% 17%;
+    /* Sage green primary */
+    --primary: 125 11% 55%;
+    --primary-foreground: 0 0% 100%;
+    /* Dusty rose secondary */
+    --secondary: 0 27% 67%;
+    --secondary-foreground: 0 0% 100%;
+    /* Warm border */
+    --border: 38 14% 91%;
+    --input: 38 14% 91%;
+    --ring: 125 11% 55%;
+    --accent: 38 14% 91%;
+    --accent-foreground: 0 3% 17%;
+    --muted: 38 14% 91%;
+    --muted-foreground: 6 3% 59%;
+    --destructive: 0 27% 67%;
+    --destructive-foreground: 0 0% 100%;
+    --radius: 0.75rem;
   }
 }
 
@@ -38,4 +38,13 @@
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
   }
+}
+
+/* Hide scrollbar while keeping scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

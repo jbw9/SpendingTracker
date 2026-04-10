@@ -13,17 +13,13 @@ const LoginPage: React.FC<LoginProps> = ({ onLogin }) => {
   const toggleView = () => setShowLogin(!showLogin);
 
   return (
-    <div className="fixed inset-0 flex flex-col md:flex-row w-screen h-screen overflow-hidden">
-      {/* Left section - full width on mobile, half on desktop */}
-      <div className="w-full h-full bg-white flex items-center justify-center order-2 md:order-1">
-        <div className="w-full px-4 md:px-12 py-8">
-
-          {showLogin ? (
-            <LoginDetails onLogin={onLogin} toggleView={toggleView} />
-          ) : (
-            <CreateNewAccount onLogin={onLogin} toggleView={toggleView} />
-          )}
-        </div>
+    <div className="fixed inset-0 flex items-center justify-center w-screen h-screen overflow-hidden" style={{ backgroundColor: '#FAF8F4' }}>
+      <div className="w-full max-w-sm px-6 py-8">
+        {showLogin ? (
+          <LoginDetails onLogin={onLogin} toggleView={toggleView} />
+        ) : (
+          <CreateNewAccount onLogin={onLogin} toggleView={toggleView} />
+        )}
       </div>
     </div>
   );

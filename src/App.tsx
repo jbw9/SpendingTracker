@@ -39,8 +39,8 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#FAF8F4' }}>
+        <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: '#7C9A7E' }} />
       </div>
     )
   }
@@ -61,8 +61,8 @@ function App() {
   return (
     <>
       <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-lg">Loading app...</div>
+        <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#FAF8F4' }}>
+          <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: '#7C9A7E' }} />
         </div>
       }>
         <MainPage session={session} supabase={supabase} />
