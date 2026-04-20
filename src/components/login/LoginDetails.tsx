@@ -53,7 +53,13 @@ const LoginDetails: React.FC<LoginDetailsProps> = ({ toggleView, onLogin }) => {
   };
 
   const handleResetPassword = async () => {
-    const { error } = await supabase.auth.resetPasswordForEmail(username);
+    if (!username) {
+      setErrorMessage("Please enter your email address first.");
+      return;
+    }
+
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await supabase.auth.resetPasswordForEmail(username, { redirectTo });
 
     if (error) {
       setErrorMessage(error.message);

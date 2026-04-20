@@ -565,14 +565,10 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
     const cleanAmount = newExpense.amount.toString().replace(/,/g, "");
 
     try {
-      // Create date based on selected month (first day of the month)
-      const monthParts = newExpense.month.split(" ");
-      const monthName = monthParts[0];
-      const year = parseInt(monthParts[1]);
-
-      const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-      const selectedDate = new Date(year, monthIndex, 1);
-      const dateString = selectedDate.toISOString().split("T")[0];
+      // Use today's date for new expenses, or preserve existing date when editing
+      const dateString = editingExpense
+        ? editingExpense.date
+        : new Date().toLocaleDateString("en-CA"); // en-CA gives YYYY-MM-DD format
       const monthString = newExpense.month;
 
       // Find the selected category to get its color
@@ -1212,7 +1208,9 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
 
   const handlePieChartClick = (data: any) => {
     if (data && data.name) {
-      setSelectedCategory(data.name);
+      const newSelected = data.name === selectedCategory ? "" : data.name;
+      setSelectedCategory(newSelected);
+      setFilterCategory(newSelected || "all");
     }
   };
 
@@ -1385,7 +1383,11 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
                   return (
                     <button
                       key={cat.name}
-                      onClick={() => setSelectedCategory(cat.name)}
+                      onClick={() => {
+                        const newSelected = cat.name === selectedCategory ? "" : cat.name;
+                        setSelectedCategory(newSelected);
+                        setFilterCategory(newSelected || "all");
+                      }}
                       className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                       style={{
                         backgroundColor: isSelected ? '#2C2C2C' : '#FAF8F4',
@@ -1489,7 +1491,7 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
             </div>
             <div className="flex gap-1.5 mt-2.5 overflow-x-auto pb-1 scrollbar-hide">
               <button
-                onClick={() => setFilterCategory('all')}
+                onClick={() => { setFilterCategory('all'); setSelectedCategory(''); }}
                 className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
                 style={{
                   backgroundColor: filterCategory === 'all' ? '#2C2C2C' : '#FAF8F4',
@@ -1502,7 +1504,11 @@ const MainPage: React.FC<MainPageProps> = ({ session, supabase }) => {
               {categories.map((cat) => (
                 <button
                   key={cat.id}
-                  onClick={() => setFilterCategory(filterCategory === cat.name ? 'all' : cat.name)}
+                  onClick={() => {
+                    const next = filterCategory === cat.name ? 'all' : cat.name;
+                    setFilterCategory(next);
+                    setSelectedCategory(next === 'all' ? '' : next);
+                  }}
                   className="flex-shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all"
                   style={{
                     backgroundColor: filterCategory === cat.name ? '#2C2C2C' : '#FAF8F4',
